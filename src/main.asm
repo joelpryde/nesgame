@@ -76,8 +76,66 @@ palette: .res 32
 .segment "CODE"
 irq_handler:
   rti
-nmi_handler:
-  rti
+
+; handle nmi
+.proc nmi_handler
+	; save registers to stack
+  pha
+	txa
+	pha
+	tya
+	pha
+
+	; skip rendering if nmi_ready isn't set
+	lda nmi_ready
+	bne :+
+		jmp ppu_update_end
+	:
+	cmp #2
+	bne cont_render
+		lda #%00000000
+		sta PPU_MASK
+		ldx #0
+		stx nmi_ready
+		jmp ppu_update_end
+	cont_render:
+
+	; transfer sprite table to video memory
+	ldx #0
+	stx PPU_SPRRAM_ADDRESS
+	lda #>oam
+	sta SPRITE_DMA
+
+	; transfer palette table to video memory
+	lda #%10001000
+	sta PPU_CONTROL
+	lda PPU_STATUS
+	lda #$3F
+	sta PPU_VRAM_ADDRESS2
+	stx PPU_VRAM_ADDRESS2
+	ldx #0
+	loop:
+		lda palette, x
+		sta PPU_VRAM_IO
+		inx
+		cpx #32
+		bcc loop
+
+	; enable rendering
+	lda #%00011110
+	sta PPU_MASK
+	ldx #0
+	stx nmi_ready
+	ppu_update_end:
+
+	; restor registers and return
+	pla
+	tya
+	pla
+	tax
+	pla
+	rti
+.endproc
 
 .proc reset_handler
 	; Clear registers and setup joypad2
