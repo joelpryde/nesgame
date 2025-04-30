@@ -67,13 +67,62 @@ welcome_txt:
 string: .asciiz "Hello, World!" ; null-terminated string
 
 .segment "TILES"
-.incbin "src/font.chr" ; include the binary file created with NEXXT
+.incbin "src/example.chr" ; include the binary file created with NEXXT
 ;.incbin "example.chr"
 
 .segment "BSS"
 palette: .res 32
 
 .segment "CODE"
+
+; wait until next NMI and then turn rendering on
+.proc ppu_update
+	lda #1
+	sta nmi_ready
+	loop:
+		lda nmi_ready
+		bne loop
+	rts
+.endproc
+
+; turn ppu rendering off (for transfering large data to ppu)
+.proc ppu_off
+	lda #2
+	sta nmi_ready
+	loop:
+		lda nmi_ready
+		bne loop
+	rts
+.endproc
+
+; clear name table
+.proc clear_nametable
+	lda PPU_STATUS
+	lda #$20
+	sta PPU_VRAM_ADDRESS2
+	lda #$00
+	sta PPU_VRAM_ADDRESS2
+
+	lda #0
+	ldy #30
+	rowloop:
+		ldx #32
+		columnloop:
+			sta PPU_VRAM_IO
+			decx
+			bne columnloop
+		dey
+		bne rowloop
+	
+	ldx #64
+	loop:
+		sta PPU_VRAM_IO
+		dex
+		bne loop
+	rts
+.endproc
+
+; irq handler - not used
 irq_handler:
   rti
 
