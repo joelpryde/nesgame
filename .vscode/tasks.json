@@ -1,0 +1,65 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "Kill Mesen",
+            "type": "shell",
+            "command": "pkill",
+            "args": [
+                "-f",
+                "Mesen"
+            ],
+            "problemMatcher": [],
+            "presentation": {
+                "echo": false,
+                "reveal": "never",
+                "focus": false,
+                "panel": "dedicated"
+            }
+        },
+        {
+            "label": "Assemble NES",
+            "type": "shell",
+            "command": "ca65",
+            "args": [
+                "src/main.asm",
+                "-o",
+                "build/main.o"
+            ],
+            "problemMatcher": []
+        },
+        {
+            "label": "Link NES",
+            "type": "shell",
+            "dependsOn": [
+                "Assemble NES"
+            ],
+            "command": "ld65",
+            "args": [
+                "build/main.o",
+                "-o",
+                "build/game.nes",
+                "-C",
+                "src/linker.cfg"
+            ],
+            "problemMatcher": []
+        },
+        {
+            "label": "Run Mesen",
+            "type": "shell",
+            "dependsOn": [
+                "Kill Mesen",
+                "Link NES"
+            ],
+            "command": "/Applications/Mesen.app/Contents/MacOS/Mesen",
+            "args": [
+                "build/game.nes"
+            ],
+            "problemMatcher": [],
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            }
+        }
+    ]
+}
