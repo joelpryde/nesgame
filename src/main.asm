@@ -75,40 +75,69 @@ palette: .res 32
 
 .segment "CODE"
 irq_handler:
-  RTI
+  rti
 nmi_handler:
-  RTI
+  rti
 
 .proc reset_handler
-  SEI ; Deactivate IRQ (non-NMI interrupts)
-  CLD ; Deactivate non-existing decimal mode
-  LDX #%00000000
-  STX PPU_CONTROL ; PPU is unstable on boot, ignore NMI for now
-  STX PPU_MASK ; Deactivate PPU drawing, so CPU can safely write to PPU's VRAM
-  BIT PPU_STATUS ; Clear the vblank flag; its value on boot cannot be trusted
-  vblankwait1: ; PPU unstable on boot, wait for vertical blanking
-	BIT PPU_STATUS ; Clear the vblank flag;
-	; and store its value into bit 7 of CPU status register
-	BPL vblankwait1 ; repeat until bit 7 of CPU status register is set (1)
-  vblankwait2: ; PPU still unstable, wait for another vertical blanking
-	BIT PPU_STATUS
-	BPL vblankwait2
-  ; PPU should be stable enough now
+	; Clear registers and setup joypad2
+	sei
+	lda #0
+	sta PPU_CONTROL
+	sta PPU_MASK
+	sta APU_DM_CONTROL
+	lda #$40
+	sta JOYPAD2
 
-  ; RAM contents on boot cannot be trusted (visual artifacts)
-  ; Clear nametable 0; It is at PPU VRAM's address $2000
-  ; CPU registers size is 1 byte, but addresses size is 2 bytes
-  LDA PPU_STATUS ; Clear w register,
-  ; so the next write to PPU_VRAM_ADDRESS2 is taken as the VRAM's address high byte.
-  ; First, we need the high byte of $2000
-  ;                                  ^^
-  LDA #$20
-  STA PPU_VRAM_ADDRESS2 ; (this also sets the w register,
-  ; so the next write to PPU_VRAM_ADDRESS2 is taken as the VRAM's address low byte)
-  ; Then, the low byte of  $2000
-  ;                           ^^
-  LDA #$00
-  STA PPU_VRAM_ADDRESS2 ; (this also clears the w register)
+	; Disable decimal mode and transfer FF to the stack register (no items)
+	cld
+	ldx #$FF
+	txs
+
+	; Wait for first vblank (bit 7 - negative flag is clear)
+	bit PPU_STATUS
+	wait_vblank:
+		bit PPU_STATUS
+		bpl wait_vblank
+
+	; Clear all ram
+	lda #0
+	ldx #0
+	clear_ram:
+		sta $0100,x
+    sta $0200,x
+    sta $0300,x
+    sta $0400,x
+    sta $0500,x
+    sta $0600,x
+    sta $0700,x
+    inx
+    bne clear_ram
+
+	; Place all sprites offscreen (byte 1 of 4 bytes is y position)
+	lda #255
+	ldx #0
+	clear_oam:
+		sta oam,x
+		inx
+		inx
+		inx
+		inx
+		bne clear_oam
+
+	; Wait for second vBlank
+	wait_vblank2:
+		bit PPU_STATUS
+		bpl wait_vblank2
+
+	; Tell PPU to use second pattern table for sprites and start nmi interupts
+	lda #%10001000
+	sta PPU_CONTROL
+	jmp main
+.endproc
+
+
+main:
   LDX #0 ; index for inner loop; overflows after 256
   LDY #4 ; index for outer loop; repeat overflow 4 times
   empty_background:
@@ -176,4 +205,3 @@ nmi_handler:
 		sta $81
 		pla
 		rts
-.endproc
