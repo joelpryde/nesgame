@@ -48,7 +48,6 @@
             "label": "Run Mesen",
             "type": "shell",
             "dependsOn": [
-                "Kill Mesen",
                 "Link NES"
             ],
             "command": "/Applications/Mesen.app/Contents/MacOS/Mesen",
