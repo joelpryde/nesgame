@@ -300,7 +300,29 @@ irq_handler:
 		jmp textloop
 	endtextloop:
 
-	; place bat and ball sprites here
+	; place bat on screen (120, 180)
+	lda #180
+	sta oam	; y position
+	lda #120
+	sta oam + 3 ; x position
+	lda #1
+	sta oam + 1 ; 0 pattern
+	lda #0
+	sta oam + 2 ; 0 attributes
+
+	; place ball on screen (124, 124)
+	lda #124
+	sta oam + (1 * 4) ; y position
+	sta oam + (1 * 4) + 3 ; x position
+	lda #2 
+	sta oam + (1 * 4) + 1 ; 1 pattern
+	lda #0
+	sta oam + (1 * 4) + 2 ; 0 attributes
+
+	; set ball initial velocity (1, 1)
+	lda #1
+	sta d_x
+	sta d_y
 
 	; setup screen to render
 	jsr ppu_update
@@ -311,7 +333,30 @@ irq_handler:
 		cmp #0
 		bne mainloop
 
-		; read gamepad here
+		; read gamepad
+		jsr gamepad_poll
+
+		; move bat left if pressed
+		lda gamepad
+		and #PAD_L
+		beq NOT_GAMEPAD_LEFT
+			lda oam + 3 ; load current x position
+			cmp #0
+			beq NOT_GAMEPAD_LEFT ; don't move, at left edge of screen
+			sec
+			sbc #1
+			sta oam + 3 ; move left
+NOT_GAMEPAD_LEFT:
+		lda gamepad
+		and #PAD_R
+		beq NOT_GAMEPAD_RIGHT
+			lda oam + 3 ; load current x position
+			cmp #248
+			beq NOT_GAMEPAD_RIGHT ; don't move, at left edge of screen
+			clc
+			adc #1
+			sta oam + 3 ; move right
+NOT_GAMEPAD_RIGHT:
 
 		; move ball here
 
