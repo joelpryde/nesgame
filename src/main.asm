@@ -336,7 +336,7 @@ irq_handler:
 		; read gamepad
 		jsr gamepad_poll
 
-		; move bat left if pressed
+		;;; move bat
 		lda gamepad
 		and #PAD_L
 		beq NOT_GAMEPAD_LEFT
@@ -346,7 +346,10 @@ irq_handler:
 			sec
 			sbc #1
 			sta oam + 3 ; move left
+
 NOT_GAMEPAD_LEFT:
+
+		; move bat right if pressed
 		lda gamepad
 		and #PAD_R
 		beq NOT_GAMEPAD_RIGHT
@@ -356,9 +359,47 @@ NOT_GAMEPAD_LEFT:
 			clc
 			adc #1
 			sta oam + 3 ; move right
+
 NOT_GAMEPAD_RIGHT:
 
-		; move ball here
+		;;; move ball
+		lda oam + (1 * 4) + 0 ; get current y
+		clc
+		adc d_y
+		sta oam + (1 * 4) + 0 ; set updated y
+		cmp #0
+		bne NOT_HITTOP ; we hit the top, reverse direction
+			lda #1
+			sta d_y
+
+NOT_HITTOP:
+	
+		lda oam + (1 * 4) + 0 ; get current y
+		cmp #210
+		bne NOT_HITBOTTOM
+			lda #$FF
+			sta d_y ; hit bottom, reverse direction (-1)
+
+NOT_HITBOTTOM:
+
+		lda oam + (1 * 4) + 3
+		clc
+		adc d_x
+		sta oam + (1 * 4) + 3
+		cmp #0
+		bne NOT_HITLEFT
+			lda #1
+			sta d_x
+
+NOT_HITLEFT:
+
+		lda oam + (1 * 4) + 3
+		cmp #248
+		bne NOT_HITRIGHT
+			lda #$FF
+			sta d_x
+
+NOT_HITRIGHT:
 
 		; ensure changes are rendered
 		lda #1
