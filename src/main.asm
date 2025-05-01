@@ -62,7 +62,7 @@ default_palette:
 .byte $0F,$14,$24,$34
 .byte $0F,$1B,$2B,$3B
 .byte $0F,$12,$22,$32  
-welcome_txt:
+welcome_text:
 .byte 'W','E','L','C', 'O', 'M', 'E', 0
 string: .asciiz "Hello, World!" ; null-terminated string
 
@@ -74,80 +74,6 @@ string: .asciiz "Hello, World!" ; null-terminated string
 palette: .res 32
 
 .segment "CODE"
-
-; wait until next NMI and then turn rendering on
-.proc ppu_update
-	lda #1
-	sta nmi_ready
-	loop:
-		lda nmi_ready
-		bne loop
-	rts
-.endproc
-
-; turn ppu rendering off (for transfering large data to ppu)
-.proc ppu_off
-	lda #2
-	sta nmi_ready
-	loop:
-		lda nmi_ready
-		bne loop
-	rts
-.endproc
-
-; clear name table
-.proc clear_nametable
-	lda PPU_STATUS
-	lda #$20
-	sta PPU_VRAM_ADDRESS2
-	lda #$00
-	sta PPU_VRAM_ADDRESS2
-
-	lda #0
-	ldy #30
-	rowloop:
-		ldx #32
-		columnloop:
-			sta PPU_VRAM_IO
-			dex
-			bne columnloop
-		dey
-		bne rowloop
-	
-	ldx #64
-	loop:
-		sta PPU_VRAM_IO
-		dex
-		bne loop
-	rts
-.endproc
-
-; poll gamepad into byte varaible (8 buttons)
-.proc gamepad_poll
-	; strobe gamepad to latch the current button state
-	lda #1
-	sta JOYPAD1
-	lda #0
-	sta JOYPAD1
-
-	; read 8 butes from interface
-	ldx #8
-	loop:
-		pha
-		lda JOYPAD1
-
-		;comines 2 low bits and store them in carry
-		and #$00000011
-		cmp #%00000001
-		pla
-
-		; rotate carry into the gamepad variable
-		ror
-		dex
-		bne loop
-		sta gamepad
-		rts
-.endproc
 
 ; irq handler - not used
 irq_handler:
@@ -270,74 +196,128 @@ irq_handler:
 	jmp main
 .endproc
 
+; wait until next NMI and then turn rendering on
+.proc ppu_update
+	lda #1
+	sta nmi_ready
+	loop:
+		lda nmi_ready
+		bne loop
+	rts
+.endproc
 
+; turn ppu rendering off (for transfering large data to ppu)
+.proc ppu_off
+	lda #2
+	sta nmi_ready
+	loop:
+		lda nmi_ready
+		bne loop
+	rts
+.endproc
 
+; clear name table
+.proc clear_nametable
+	lda PPU_STATUS
+	lda #$20
+	sta PPU_VRAM_ADDRESS2
+	lda #$00
+	sta PPU_VRAM_ADDRESS2
 
-main:
-  LDX #0 ; index for inner loop; overflows after 256
-  LDY #4 ; index for outer loop; repeat overflow 4 times
-  empty_background:
-	; The size of a nametable is 1024 bytes
-	; 256 bytes * 4 = 1024 bytes
-	; A register already contains 0
-	STA PPU_VRAM_IO ; After writing, PPU_VRAM_ADDRESS2 is automatically increased by 1
-	INX
-	BNE empty_background ; repeat until overflow
-	DEY
-	BNE empty_background ; repeat 4 times
+	lda #0
+	ldy #30
+	rowloop:
+		ldx #32
+		columnloop:
+			sta PPU_VRAM_IO
+			dex
+			bne columnloop
+		dey
+		bne rowloop
+	
+	ldx #64
+	loop:
+		sta PPU_VRAM_IO
+		dex
+		bne loop
+	rts
+.endproc
 
-  ; Background color (index 0 of first color palette)
-  ; is at PPU's VRAM address 3f00
-  LDX #$3f ; 3f00
-  ;          ^^
-  STX PPU_VRAM_ADDRESS2
-  LDX #$00 ; 3f00
-  ;            ^^
-  STX PPU_VRAM_ADDRESS2
-  ; Finally, we need indexes of two PPU's internal color
-  LDA #$0F ; black for the transparency color (palette 0 color 0)
-  STA PPU_VRAM_IO
-  LDA #$30 ; white for the first background color (palette 0 color 1)
-  STA PPU_VRAM_IO
+; poll gamepad into byte varaible (8 buttons)
+.proc gamepad_poll
+	; strobe gamepad to latch the current button state
+	lda #1
+	sta JOYPAD1
+	lda #0
+	sta JOYPAD1
 
-  ; Nametable 0
-  ; I have chosen a position near the center of the screen
-  ; Address 218c
-  LDX #$21 ; 218c
-  ;          ^^
-  STX PPU_VRAM_ADDRESS2
-  LDX #$8c ; 218c
-  ;            ^^
-  STX PPU_VRAM_ADDRESS2
-  LDX #0
-  LDA string,X ; load first character of the string
-  .scope
-	print:
-	  STA PPU_VRAM_IO ; write its ASCII code, which coincides with its tile index
-	  INX
-	  LDA string,X ; load next character of the string
-	  BNE print ; repeat until null character is loaded
-  .endscope
-
-  ; center viewer to nametable 0
-  LDA #0
-  STA PPU_VRAM_ADDRESS1 ; X position (this also sets the w register)
-  STA PPU_VRAM_ADDRESS1 ; Y position (this also clears the w register)
-
-  ;     BGRsbMmG
-  LDA #%00001010
-  STA PPU_MASK ; Enable background drawing and leftmost 8 pixels of screen
-
-	lda #05
-	forever:
-		jsr somefunction
-	JMP forever ; Make CPU wait forever, while PPU keeps drawing frames forever
-
-	somefunction:
-		lda $20
+	; read 8 butes from interface
+	ldx #8
+	loop:
 		pha
-		lda #10
-		adc $80
-		sta $81
+		lda JOYPAD1
+
+		;comines 2 low bits and store them in carry
+		and #$00000011
+		cmp #%00000001
 		pla
+
+		; rotate carry into the gamepad variable
+		ror
+		dex
+		bne loop
+		sta gamepad
 		rts
+.endproc
+
+; main application and game loop
+.proc main
+	; initialize palette table
+	ldx #0
+	paletteloop:
+		lda default_palette, x
+		sta palette, x
+		inx
+		cpx #32
+		bcc paletteloop
+
+	; clear name table
+	jsr clear_nametable
+
+	; draw some text (loop until we find 0 in welcome message)
+	lda PPU_STATUS
+	lda #$20
+	sta PPU_VRAM_ADDRESS2
+	lda #$8A
+	sta PPU_VRAM_ADDRESS2
+	ldx #0
+	textloop:
+		lda welcome_text, x
+		sta PPU_VRAM_IO
+		inx
+		cmp #0
+		beq endtextloop
+		jmp textloop
+	endtextloop:
+
+	; place bat and ball sprites here
+
+	; setup screen to render
+	jsr ppu_update
+
+	mainloop:
+		; skips reading constrols if change has not been drawn
+		lda nmi_ready
+		cmp #0
+		bne mainloop
+
+		; read gamepad here
+
+		; move ball here
+
+		; ensure changes are rendered
+		lda #1
+		sta nmi_ready
+		jmp mainloop
+
+.endproc

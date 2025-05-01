@@ -24,7 +24,8 @@
             "args": [
                 "src/main.asm",
                 "-o",
-                "build/main.o"
+                "build/main.o",
+                "-g"
             ],
             "problemMatcher": []
         },
@@ -40,7 +41,9 @@
                 "-o",
                 "build/game.nes",
                 "-C",
-                "src/linker.cfg"
+                "src/linker.cfg",
+                "--dbgfile",
+                "build/game.dbg"
             ],
             "problemMatcher": []
         },
