@@ -109,7 +109,7 @@ palette: .res 32
 		ldx #32
 		columnloop:
 			sta PPU_VRAM_IO
-			decx
+			dex
 			bne columnloop
 		dey
 		bne rowloop
@@ -120,6 +120,33 @@ palette: .res 32
 		dex
 		bne loop
 	rts
+.endproc
+
+; poll gamepad into byte varaible (8 buttons)
+.proc gamepad_poll
+	; strobe gamepad to latch the current button state
+	lda #1
+	sta JOYPAD1
+	lda #0
+	sta JOYPAD1
+
+	; read 8 butes from interface
+	ldx #8
+	loop:
+		pha
+		lda JOYPAD1
+
+		;comines 2 low bits and store them in carry
+		and #$00000011
+		cmp #%00000001
+		pla
+
+		; rotate carry into the gamepad variable
+		ror
+		dex
+		bne loop
+		sta gamepad
+		rts
 .endproc
 
 ; irq handler - not used
@@ -242,6 +269,8 @@ irq_handler:
 	sta PPU_CONTROL
 	jmp main
 .endproc
+
+
 
 
 main:
