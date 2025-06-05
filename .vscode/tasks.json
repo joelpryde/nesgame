@@ -22,7 +22,7 @@
             "type": "shell",
             "command": "ca65",
             "args": [
-                "src/main.asm",
+                "src/megablast.s",
                 "-o",
                 "build/main.o",
                 "-g"

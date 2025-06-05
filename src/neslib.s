@@ -69,6 +69,8 @@ nmi_ready: .res 1	; Sets to 1 to push a PPU update, 2 to turn rendering off next
 ppu_ct10: .res 1	; PPU control register 1 value 
 ppu_ct11: .res 1	; PPU control register 2 value
 
+gamepad:	.res 1 	; current gamepad value
+
 .segment "CODE"
 
 ; Wait for nmi_ready

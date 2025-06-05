@@ -1,5 +1,3 @@
-.include "neslib.s"
-
 .segment "VECTORS" ; interupt handlers
 .addr nmi_handler, reset_handler, irq_handler
 
