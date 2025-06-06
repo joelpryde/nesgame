@@ -24,6 +24,9 @@ INES_SRAM = 0 ; 1 = battery-backed SRAM at $6000-7FFF
 ; variable storage (in zero-page)
 .segment "ZEROPAGE"
 
+text_address:	.res 2	; address of text to write
+paddr: .res	2					; 16-bit address pointer
+
 ; sprite oam data
 .segment "OAM"
 oam: .res 256
@@ -33,7 +36,6 @@ oam: .res 256
 ; larger memory allocations
 .segment "BSS"
 palette: .res 32 ; current palette buffer
-
 
 .segment "CODE"
 
@@ -166,6 +168,70 @@ paletteloop:				; intitialize palette table
 
 	jsr ppu_update
 
+	jsr display_title_screen
+
+	; setup game settings
+	lda #VBLANK_NMI|BG_0000|OBJ_0000
+	sta ppu_ct10
+	lda #BG_ON|OBJ_ON
+	sta ppu_ct11
+
+	jsr ppu_update
+
 mainloop:
 	jmp mainloop
 .endproc
+
+.proc write_text
+	ldy #0
+loop:
+	lda (text_address), y 	; gets the btye at the current source address
+	beq exit								; exit when we encounter a zero in the text
+	sta PPU_VRAM_IO					; write the byte to video memory
+	iny
+	jmp loop
+exit:
+	rts
+.endproc
+
+title_text:
+.byte "M E G A  B L A S T",0
+
+press_play_text:
+.byte "PRESS FIRE TO BEGIN",0
+ 
+title_attributes:
+.byte %00000101,%00000101,%00000101,%00000101
+.byte %00000101,%00000101,%00000101,%00000101
+
+.proc display_title_screen
+	jsr ppu_off						; wait for screen to be drawn and then turn off
+	
+	jsr clear_nametable		; write title text
+	
+	; write out press play text (on 5 line of screen and 7 tiles in)
+	vram_set_address (NAME_TABLE_0_ADDRESS + 4 * 32 + 6)
+	assign_16i text_address, title_text
+	jsr write_text
+
+	; write out press play text (on 21 line of screen and 7 tiles in)
+	vram_set_address (NAME_TABLE_0_ADDRESS + 20 * 32 + 6)
+	assign_16i text_address, press_play_text
+	jsr write_text
+
+	; set the title text to use the second palette table
+	vram_set_address (ATTRIBUTE_TABLE_O_ADDRESS + 8)
+	assign_16i paddr, title_attributes
+	ldy #0
+loop:
+	lda (paddr),y
+	sta PPU_VRAM_IO
+	iny
+	cpy #8
+	bne loop
+	
+	jsr ppu_update	; wait for screen to be drawn
+
+	rts
+.endproc
+
