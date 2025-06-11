@@ -144,7 +144,7 @@ gamepad:	.res 1 	; current gamepad value
 	lda #0
 	sta JOYPAD1
 
-	; read 8 butes from interface
+	; read 8 butes from interface at $4016
 	ldx #8
 	loop:
 		pha
@@ -156,7 +156,7 @@ gamepad:	.res 1 	; current gamepad value
 		pla
 
 		; rotate carry into the gamepad variable
-		ror
+		ror a
 		dex
 		bne loop
 		sta gamepad

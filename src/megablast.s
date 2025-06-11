@@ -55,6 +55,13 @@ default_palette:
 .byte $0F,$1B,$2B,$3B ; sp2 teal
 .byte $0F,$12,$22,$32 ; sp3 marine
 
+game_screen_mountain:
+.byte 001,002,003,004,001,002,003,004,001,002,003,004,001,002,003,004
+.byte 001,002,003,004,001,002,003,004,001,002,003,004,001,002,003,004
+ 
+game_screen_scoreline:
+.byte "SCORE 0000000"
+
 ; main application entry point for startup/reset
 .segment "CODE"
 .proc reset
@@ -161,13 +168,7 @@ paletteloop:				; intitialize palette table
 	cpx #32
 	bcc paletteloop
 
-	lda #VBLANK_NMI|BG_0000|OBJ_1000	; set our game settings
-	sta ppu_ct10
-	lda #BG_ON|OBJ_ON
-	sta ppu_ct11
-
-	jsr ppu_update
-
+	; draw title screen
 	jsr display_title_screen
 
 	; setup game settings
@@ -177,6 +178,16 @@ paletteloop:				; intitialize palette table
 	sta ppu_ct11
 
 	jsr ppu_update
+
+	; wait for gamepad to be pressed
+titleloop:
+	jsr gamepad_poll
+	lda gamepad
+	and #PAD_A|PAD_B|PAD_START|PAD_SELECT
+	beq titleloop
+
+	; draw game screen
+	jsr display_game_screen
 
 mainloop:
 	jmp mainloop
@@ -232,6 +243,46 @@ loop:
 	
 	jsr ppu_update	; wait for screen to be drawn
 
+	rts
+.endproc
+
+.proc display_game_screen
+	jsr ppu_off						; wait for screen clear
+
+	jsr clear_nametable		; clear first name table
+
+	; output mountain line
+	vram_set_address (NAME_TABLE_0_ADDRESS + 22 * 32)
+	assign_16i paddr, game_screen_mountain
+	ldy #0
+loop:
+	lda (paddr),y
+	sta PPU_VRAM_IO
+	iny
+	cpy #32
+	bne loop
+
+	; draw baseline
+	vram_set_address (NAME_TABLE_0_ADDRESS + 26 * 32)
+	ldy #0
+	lda #9
+loop2:
+	sta PPU_VRAM_IO
+	iny
+	cpy #32
+	bne loop2
+
+	; output score section on next line
+	assign_16i paddr, game_screen_scoreline
+	ldy #0
+loop3:
+	lda (paddr),y
+	sta PPU_VRAM_IO
+	iny
+	cpy #13
+	bne loop3
+
+	jsr ppu_update	;wait for screen to be drawn
 	rts
 .endproc
 
