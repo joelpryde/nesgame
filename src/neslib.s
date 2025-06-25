@@ -64,6 +64,9 @@ ATTRIBUTE_TABLE_1_ADDRESS = $27C0
 
 nmi_ready: .res 1	; Sets to 1 to push a PPU update, 2 to turn rendering off next NMI
 
+time: .res 1
+lasttime: .res 1
+
 .include "macro.s"
 
 ppu_ct10: .res 1	; PPU control register 1 value 

@@ -124,6 +124,8 @@ wait_vblank2:				;wait for second vblank
 	tya
 	pha
 
+	inc time					; increment time ticker
+
 	bit PPU_STATUS
 	lda #>oam					; transfer sprite oam using dma
 	sta SPRITE_DMA
@@ -186,10 +188,24 @@ titleloop:
 	and #PAD_A|PAD_B|PAD_START|PAD_SELECT
 	beq titleloop
 
-	; draw game screen
-	jsr display_game_screen
+	jsr display_game_screen	; draw game screen
+
+	jsr place_ship	; place ship initially
 
 mainloop:
+	lda time
+
+	cmp lasttime	; ensure time has changed
+	beq mainloop
+
+	sta lasttime	; update lasttime
+
+	jsr player_actions ; update ship sprites from player input
+
+	jmp mainloop
+
+	jsr ppu_update
+
 	jmp mainloop
 .endproc
 
@@ -286,3 +302,85 @@ loop3:
 	rts
 .endproc
 
+.proc player_actions
+	jsr gamepad_poll		; check gamepad to see what is selected
+	lda gamepad
+	and #PAD_L					; see if left is selected
+	beq not_gamepad_left
+		lda oam + 3				; get the x pos of ship
+		cmp #0						; check if at left side of screen
+		beq not_gamepad_left
+
+		sec
+		sbc #2						; subtract 2 from x pos
+
+		sta oam + 3				; update sprite positions
+		sta oam + 11
+		clc
+		
+		adc #8						; adjust to right side of ship
+		sta oam + 7
+		sta oam + 15
+
+not_gamepad_left:
+
+	lda gamepad
+	and #PAD_R					; check right bit
+	beq not_gamepad_right
+		lda oam + 3				; get x pos of ship
+		clc
+		adc #12						; allow for width of ship when checking right side
+		cmp #254
+		beq not_gamepad_right
+		lda oam + 3				; get x pos of ship
+		clc
+		adc #2						; add 2 to  x pos
+
+		sta oam + 3				; update sprite positions
+		sta oam + 11
+		clc
+		adc #8						; adjust to right side of ship
+		sta oam + 7
+		sta oam + 15
+
+not_gamepad_right:
+
+	rts
+.endproc
+
+.proc place_ship
+	; set y positions of player ship sprites
+	lda #192
+	sta oam
+	sta oam + 4
+	lda #200
+	sta oam + 8
+	sta oam + 12
+
+	; set index number of player sprite
+	ldx #5
+	stx oam + 1
+	inx
+	stx oam + 5
+	inx
+	stx oam + 9
+	inx
+	stx oam + 13
+
+	; set the sprite attributes
+	lda #%00000000
+	sta oam + 2
+	sta oam + 6
+	sta oam + 10
+	sta oam + 14
+
+	; set x positions of player ship sprites
+	lda #120
+	sta oam + 3
+	sta oam + 11
+	lda #128
+	sta oam + 7
+	sta oam + 15
+
+	rts
+.endproc
