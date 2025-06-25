@@ -200,7 +200,8 @@ mainloop:
 
 	sta lasttime	; update lasttime
 
-	jsr player_actions ; update ship sprites from player input
+	jsr player_actions 			; update ship sprites from player input
+	jsr move_player_bullet	; and bullet
 
 	jmp mainloop
 
@@ -345,6 +346,26 @@ not_gamepad_left:
 
 not_gamepad_right:
 
+	lda gamepad
+	and #PAD_A					; check a button
+	beq not_gamepad_a
+		lda oam + 16			; get y position of player bullet
+		cmp #$FF					; see if sprite not in use
+		bne not_gamepad_a
+
+			lda #192				; place the bullet
+			sta oam + 16		; set y position
+			lda #9
+			sta oam + 17		; set bullet sprite
+			lda #0
+			sta oam + 18		; set bullet attribute
+			lda oam + 3			; get x position of ship
+			clc
+			adc #6					; adjust the c position to center the bullen on the player hsip
+			sta oam + 19		; set bullet x pos
+
+not_gamepad_a:
+
 	rts
 .endproc
 
@@ -382,5 +403,20 @@ not_gamepad_right:
 	sta oam + 7
 	sta oam + 15
 
+	rts
+.endproc
+
+.proc move_player_bullet
+	lda oam + 16			; get current y pos of bullet
+	cmp #$FF					; see if bullet is on screen
+	beq @exit
+		sec
+		sbc #4					; move upwards by 4
+		sta oam + 16		; store new y pos
+		bcs @exit
+			lda #$FF			; value is carried, so we are off screen, hide it
+			sta oam + 16
+
+@exit:
 	rts
 .endproc
