@@ -27,6 +27,15 @@ INES_SRAM = 0 ; 1 = battery-backed SRAM at $6000-7FFF
 text_address:	.res 2	; address of text to write
 paddr: .res	2					; 16-bit address pointer
 
+time: .res 2
+lasttime: .res 1
+
+level: .res 1
+animate: .res 1
+enemydata: .res 20
+enemycooldown: .res 1
+temp: .res 10
+
 ; sprite oam data
 .segment "OAM"
 oam: .res 256
@@ -173,11 +182,16 @@ paletteloop:				; intitialize palette table
 	cpx #32
 	bcc paletteloop
 
+	; setup first level
+	lda #1
+	sta level
+	jsr setup_level
+
 	; draw title screen
 	jsr display_title_screen
 
 	; setup game settings
-	lda #VBLANK_NMI|BG_0000|OBJ_0000
+	lda #VBLANK_NMI|BG_0000|OBJ_1000
 	sta ppu_ct10
 	lda #BG_ON|OBJ_ON
 	sta ppu_ct11
@@ -373,7 +387,7 @@ not_gamepad_right:
 
 			lda #192				; place the bullet
 			sta oam + 16		; set y position
-			lda #9
+			lda #4
 			sta oam + 17		; set bullet sprite
 			lda #0
 			sta oam + 18		; set bullet attribute
@@ -397,7 +411,7 @@ not_gamepad_a:
 	sta oam + 12
 
 	; set index number of player sprite
-	ldx #5
+	ldx #0
 	stx oam + 1
 	inx
 	stx oam + 5
@@ -438,3 +452,27 @@ not_gamepad_a:
 @exit:
 	rts
 .endproc
+
+.proc setup_level
+	lda #0		; clear enemy data
+	ldx #0
+@loop:
+	sta enemydata, x
+	inx
+	cpx #20
+	bne @loop
+	lda #20		; set initial cooldown
+	sta enemycooldown
+	rts
+.endproc
+
+.proc spawn_enemies
+	ldx enemycooldown		; set short cooldown
+	dex
+	stx enemycooldown
+	cpx #0
+	beq :+
+	rts
+:
+.endproc
+

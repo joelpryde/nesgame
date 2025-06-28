@@ -64,9 +64,6 @@ ATTRIBUTE_TABLE_1_ADDRESS = $27C0
 
 nmi_ready: .res 1	; Sets to 1 to push a PPU update, 2 to turn rendering off next NMI
 
-time: .res 2
-lasttime: .res 1
-
 SEED0: .res 2		; First 16-bit seed value
 SEED2: .res 2		; Second 16-bit seed value
 
