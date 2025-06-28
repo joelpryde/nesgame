@@ -124,7 +124,10 @@ wait_vblank2:				;wait for second vblank
 	tya
 	pha
 
-	inc time					; increment time ticker
+	inc time					; increment lower byte of time counter
+	bne :+						; increment upper byte after 255 times
+		inc time + 1
+	:
 
 	bit PPU_STATUS
 	lda #>oam					; transfer sprite oam using dma
@@ -187,6 +190,21 @@ titleloop:
 	lda gamepad
 	and #PAD_A|PAD_B|PAD_START|PAD_SELECT
 	beq titleloop
+
+	; use time of title screen clear to seen random values
+	lda time
+	sta SEED0
+	lda time + 1
+	sta SEED0 + 1
+	jsr randomize
+	sbc time + 1
+	sta SEED2
+	jsr randomize
+	sbc time + 1
+	sta SEED2
+	jsr randomize
+	sbc time
+	sta SEED2 + 1
 
 	jsr display_game_screen	; draw game screen
 

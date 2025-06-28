@@ -64,8 +64,11 @@ ATTRIBUTE_TABLE_1_ADDRESS = $27C0
 
 nmi_ready: .res 1	; Sets to 1 to push a PPU update, 2 to turn rendering off next NMI
 
-time: .res 1
+time: .res 2
 lasttime: .res 1
+
+SEED0: .res 2		; First 16-bit seed value
+SEED2: .res 2		; Second 16-bit seed value
 
 .include "macro.s"
 
@@ -166,6 +169,53 @@ gamepad:	.res 1 	; current gamepad value
 		rts
 .endproc
 
+.proc randomize
+	lda SEED0
+	lsr
+	rol SEED0 + 1
+	bcc @noeor
+	eor #$B4
+@noeor:
+	sta SEED0
+	eor SEED0 + 1
+	rts
+.endproc
+
+.proc rand
+	jsr rand64k
+	jsr rand32k
+	lda SEED0 + 1
+	eor SEED2 + 1
+	tay
+	lda SEED0
+	eor SEED2
+	rts
+.endproc
+
+.proc rand64k
+	lda SEED0 + 1
+	asl
+	asl
+	eor SEED0 + 1
+	asl
+	asl
+	eor SEED0 + 1
+	asl
+	rol SEED0
+	rol SEED0 + 1
+	rts
+.endproc
+
+.proc rand32k
+	lda SEED2 + 1
+	asl
+	eor SEED2 + 1
+	asl
+	asl
+	ror SEED2
+	rol SEED2 + 1
+	rts
+.endproc
 
 
 
