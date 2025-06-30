@@ -234,6 +234,7 @@ mainloop:
 
 	jsr player_actions 			; update ship sprites from player input
 	jsr move_player_bullet	; and bullet
+	jsr spawn_enemies				; and attempt to spawn enemies
 
 	jmp mainloop
 
@@ -467,12 +468,88 @@ not_gamepad_a:
 .endproc
 
 .proc spawn_enemies
-	ldx enemycooldown		; set short cooldown
+	ldx enemycooldown		; decrement enemy cooldown
 	dex
 	stx enemycooldown
 	cpx #0
 	beq :+
 	rts
 :
+
+	ldx #1						; set a short cooldown
+	stx enemycooldown
+	lda level 				; get the current level
+	clc
+	adc #1						; increment by 1
+	asl
+	asl								; multiply by 4 (shift left twice)
+	sta temp					; save our value
+	jsr rand					; get next random value
+	tay								; transfer value to y register
+	cpy temp
+	bcc :+						; continue if random value is less than calculated value
+	rts
+:
+
+	ldx #20						; set new cooldown period
+	stx enemycooldown
+
+	ldy #0						; see if new enemy object is available
+@loop:
+	lda enemydata, y
+	beq :+
+	iny								; increment counter
+	cpy #10
+	bne @loop
+	rts								; did not find enemy to use
+:
+
+	lda #1						; mark the enemy as in use
+	sta enemydata, y
+
+	tya								; calculate the first sprite oam position
+	asl								; multiple by 16 (left shift four times)
+	asl
+	asl
+	asl
+	clc
+	adc #20						; skip the first 5 sprites (20 bytes)
+	tax
+
+	lda #0						; set y position of all four parts of enemy
+	sta oam, x
+	sta oam + 4, x
+	lda #8
+	sta oam + 8, x
+	sta oam + 12, x
+
+	lda #8						; set index number of sprite pattern
+	sta oam + 1, x
+	clc
+	adc #1
+	sta oam + 5, x
+	adc #1
+	sta oam + 9, x
+	adc #1
+	sta oam + 13, x
+	
+	lda #%00000000		; set sprite attributes
+	sta oam + 2, x
+	sta oam + 6, x
+	sta oam + 10, x
+	sta oam + 14, x
+
+	jsr rand					; set the x position of all four parts of enemy (using rand for offset)
+	and #%11110000
+	clc
+	adc #48
+	sta oam + 3, x
+	sta oam + 11, x
+	clc
+	adc #8
+	sta oam + 7, x
+	sta oam + 15, x
+
+	rts
 .endproc
 
