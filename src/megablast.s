@@ -138,13 +138,18 @@ wait_vblank2:				;wait for second vblank
 		inc time + 1
 	:
 
+	; only update PPU if rendering is enabled
+	lda ppu_ct11
+	and #BG_ON|OBJ_ON
+	beq @skip_ppu_update
+
 	bit PPU_STATUS
 	lda #>oam					; transfer sprite oam using dma
 	sta SPRITE_DMA
 
 	; transfer current palette to vram
 	vram_set_address $3F00 ; set ppu address
-	lda #0						; transfer 32 bytes to vram
+	ldx #0						; transfer 32 bytes to vram
 @loop:
 	lda palette, x
 	sta PPU_VRAM_IO
@@ -161,6 +166,8 @@ wait_vblank2:				;wait for second vblank
 	lda ppu_ct11
 	sta PPU_MASK
 
+@skip_ppu_update:
+
 	; flag that the ppu has update is complete
 	ldx #0
 	stx nmi_ready
@@ -173,7 +180,10 @@ wait_vblank2:				;wait for second vblank
 .endproc
 
 .proc main
-	;
+	; turn off rendering immediately
+	lda #0
+	sta PPU_MASK
+	
 	ldx #0
 paletteloop:				; intitialize palette table
 	lda default_palette, x
@@ -237,9 +247,7 @@ mainloop:
 	jsr spawn_enemies				; and attempt to spawn enemies
 	jsr move_enemies				; and move enemies
 
-	jmp mainloop
-
-	jsr ppu_update
+	jsr ppu_update					; update ppu each frame
 
 	jmp mainloop
 .endproc
@@ -292,8 +300,6 @@ loop:
 	cpy #8
 	bne loop
 	
-	jsr ppu_update	; wait for screen to be drawn
-
 	rts
 .endproc
 
