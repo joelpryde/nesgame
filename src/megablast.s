@@ -235,6 +235,7 @@ mainloop:
 	jsr player_actions 			; update ship sprites from player input
 	jsr move_player_bullet	; and bullet
 	jsr spawn_enemies				; and attempt to spawn enemies
+	jsr move_enemies				; and move enemies
 
 	jmp mainloop
 
@@ -468,6 +469,7 @@ not_gamepad_a:
 .endproc
 
 .proc spawn_enemies
+
 	ldx enemycooldown		; decrement enemy cooldown
 	dex
 	stx enemycooldown
@@ -552,4 +554,57 @@ not_gamepad_a:
 
 	rts
 .endproc
+
+.proc move_enemies
+
+	ldy #0
+	lda #0
+@loop:
+	lda enemydata, y
+	beq @skip					; enemy not on screen, skip to next
+
+	tya								; enemy is on screen, calculate first sprite oam position
+	asl								; multiply by 16 (left shift four times)
+	asl
+	asl
+	asl
+	clc
+	adc #20						; skip first five sprites
+	tax
+
+	lda oam, x				; get enemy y
+	clc
+	adc #1						; move down screen
+	cmp #196
+	bcc @nohitbottom
+
+	lda #255					; has reached the ground
+	sta oam, x				; hide all sprites
+	sta oam + 4, x
+	sta oam + 8, x
+	sta oam + 12, x
+	lda #0
+	sta enemydata, y
+	jmp @skip
+
+@nohitbottom:
+	sta oam, x				; save the new y pos
+	sta oam + 4, x
+	clc
+	adc #8
+	sta oam + 8, x
+	sta oam + 12, x
+
+@skip:
+	iny								; go to next enemy
+	cpy #10
+	bne @loop
+
+	rts
+.endproc
+
+
+
+
+
 
