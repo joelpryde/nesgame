@@ -563,6 +563,16 @@ not_gamepad_a:
 
 .proc move_enemies
 
+	; load bullet args for collision detection between bullet and enemy
+	lda oam + 16			; get bullet y
+	sta cy1
+	lda oam + 19			; get bullet x
+	sta cx1
+	lda #4						; bullet is 4 pixels heigh
+	sta ch1
+	lda #1						; bullet is 1 pixel wid
+	sta cw1
+
 	ldy #0
 	lda #0
 @loop:
@@ -600,6 +610,31 @@ not_gamepad_a:
 	adc #8
 	sta oam + 8, x
 	sta oam + 12, x
+	
+	lda oam + 16
+	cmp #$FF					; is the bullet on the screen?
+	beq @skip
+
+	; load the x and y pos of enemy as collision detection args
+	lda oam, x				; get enemy y pos
+	sta cy2
+	lda oam + 3, x		; get enemy x pos
+	sta cx2
+	lda #14						; set enemy width/height
+	sta cw2
+	sta ch2
+	jsr collision_test
+	bcc @skip
+
+	; remove bullent and enemy from screen
+	lda #$FF
+	sta oam + 16			; erase the player bullet
+	sta oam, x				; erase the enemy
+	sta oam + 4, x
+	sta oam + 8, x
+	sta oam + 12, x
+	lda #0						; clear the enemy's data flag
+	sta enemydata, y
 
 @skip:
 	iny								; go to next enemy

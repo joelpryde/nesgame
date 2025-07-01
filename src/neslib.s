@@ -64,8 +64,18 @@ ATTRIBUTE_TABLE_1_ADDRESS = $27C0
 
 nmi_ready: .res 1	; Sets to 1 to push a PPU update, 2 to turn rendering off next NMI
 
-SEED0: .res 2		; First 16-bit seed value
-SEED2: .res 2		; Second 16-bit seed value
+SEED0: 	.res 2		; First 16-bit seed value
+SEED2: 	.res 2		; Second 16-bit seed value
+
+cx1:		.res 1 		; obj 1 x pos
+cy1:		.res 1		; obj 1 y pos
+cw1:		.res 1		; obj 1 height
+ch1:		.res 1		; obj 1 width
+
+cx2:		.res 1		; obj 2 x pos
+cy2:		.res 1		; obj 2 y pos
+cw2:		.res 1		; obj 2 height
+ch2:		.res 1		; obj 2 width
 
 .include "macro.s"
 
@@ -214,5 +224,34 @@ gamepad:	.res 1 	; current gamepad value
 	rts
 .endproc
 
+.proc collision_test
+	clc
+	lda cx1				; get obj 1 x pos
+	adc cw1				; add obj 1 width
+	cmp cx2				; is obj 2 to the right of obj 1 + width
+	bcc @exit
+	clc
+	lda cx2				; get obj 2 x pos
+	adc cw2				; add object 2 width
+	cmp cx1				; is obj 2 to the left of obj 1
+	bcc	@exit
+
+	lda cy1				; get obj 1 y
+	adc ch1				; add obj 1 height
+	cmp cy2				; is obj 2 below obj 1 + height
+	bcc @exit
+	clc
+	lda cy2				; get obj 2 y
+	adc ch2				; add obj 2 height
+	cmp cy1				; is obj 2 above obj 1
+	bcc @exit
+
+	sec						; we have a hit, set carry flag and return
+	rts
+
+@exit:
+	clc						; no hit, clear carry flag and exit
+	rts
+.endproc
 
 
