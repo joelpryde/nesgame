@@ -254,4 +254,63 @@ gamepad:	.res 1 	; current gamepad value
 	rts
 .endproc
 
+.proc dec99_to_bytes
+	ldx #0
+	cmp #50						; check if over 50, otherwise try subtracting 20s
+	bcc try20
+	sbc #50						
+	ldx #5						; subtract 50 and set decimal digit to 5
+	bne try20
 
+div20:
+	inx
+	inx
+	sbc #20					; add 2 to decimal digit and subtract 20
+try20:
+	cmp #20
+	bcs div20				; still more than 20, repeat
+
+try10:
+	cmp #10
+	bcc @finished
+	sbc #10
+	inx							; add 1 to decimal digit and subtract 10
+
+@finished:
+
+	rts
+.endproc
+
+.proc display_score
+	vram_set_address (NAME_TABLE_0_ADDRESS + 27 * 32 + 6)
+
+	lda score + 2					; transform first two digits
+	jsr dec99_to_bytes
+	stx temp
+	sta temp + 1
+
+	lda score + 1					; next two digits
+	jsr dec99_to_bytes
+	stx temp + 2
+	sta temp + 3
+
+	lda score							; final two digits
+	jsr dec99_to_bytes
+	stx temp + 4
+	sta temp + 5
+
+	ldx #0								; write the six characters to the screen
+@loop:
+	lda temp, x
+	clc
+	adc #48
+	sta PPU_VRAM_IO
+	inx
+	cpx #6
+	bne @loop
+	lda #48								; write trailing 0
+	sta PPU_VRAM_IO
+
+	vram_clear_address
+	rts
+.endproc

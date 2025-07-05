@@ -35,6 +35,8 @@ animate: .res 1
 enemydata: .res 20
 enemycooldown: .res 1
 temp: .res 10
+score: .res 3					; player's current score
+update: .res 1				; flag to know when score has changed
 
 ; sprite oam data
 .segment "OAM"
@@ -157,6 +159,15 @@ wait_vblank2:				;wait for second vblank
 	cpx #32
 	bcc @loop
 
+	lda #%00000001		; check update flag
+	bit update
+	beq @skipscore
+		jsr display_score	; display score
+		lda #%11111110	; reset update flag
+		and update
+		sta update
+	@skipscore:
+
 	; write the current scroll and control regsiter settings to ppu
 	lda #0
 	sta PPU_VRAM_ADDRESS1
@@ -196,6 +207,12 @@ paletteloop:				; intitialize palette table
 	lda #1
 	sta level
 	jsr setup_level
+
+	; reset player's score
+	lda #0
+	sta score
+	sta score + 1
+	sta score + 2
 
 	; draw title screen
 	jsr display_title_screen
@@ -577,7 +594,9 @@ not_gamepad_a:
 	lda #0
 @loop:
 	lda enemydata, y
-	beq @skip					; enemy not on screen, skip to next
+	beq :+
+		jmp @skip					; enemy not on screen, skip to next
+	:
 
 	tya								; enemy is on screen, calculate first sprite oam position
 	asl								; multiply by 16 (left shift four times)
@@ -601,6 +620,17 @@ not_gamepad_a:
 	sta oam + 12, x
 	lda #0
 	sta enemydata, y
+
+	clc							; check if the score is not already zero
+	lda score
+	adc score + 1
+	adc score + 2
+	bne :+
+		jmp @skip
+	:
+	lda #1					; subtract 10 from score
+	jsr subtract_score
+
 	jmp @skip
 
 @nohitbottom:
@@ -636,16 +666,85 @@ not_gamepad_a:
 	lda #0						; clear the enemy's data flag
 	sta enemydata, y
 
+	lda #2						; add 20 points to score
+	jsr add_score
+
 @skip:
 	iny								; go to next enemy
 	cpy #10
-	bne @loop
+	beq :+
+		jmp @loop
+	:
 
 	rts
 .endproc
 
+.proc add_score
+	clc
+	adc score					; add the value in a to the first byte of score
+	sta score
+	cmp #99
+	bcc @skip
 
+	sec								; first byte has exceeded 99, handle overflow
+	sbc #100
+	sta score
+	inc score + 1
+	lda score + 1
+	cmp #99
+	bcc @skip
 
+	sec								; second byte has exceeded 99, handle overflow
+	sbc #100
+	sta score + 1
+	inc score + 2
+	lda score + 2
+	cmp #99
+
+	bcc @skip
+	sec								; third byte has exceeded 99, handle overflow
+	sbc #100
+	sta score + 2
+
+@skip:
+	lda #$00000001		; set the flag to write score to screen
+	ora update
+	sta update
+	rts
+.endproc
+	
+.proc subtract_score
+	sta temp					; save A value
+	sec
+	lda score
+	sbc temp					; subtract A value from the first byte of score
+	sta score
+	bcs @skip
+
+	clc
+	adc #100					; current value in A is negative, add to 100 so we are 99 or less
+	sta score
+	dec score + 1			; decrement second score byte
+	bcs @skip
+
+	clc								; add 100 to ensure byte 2 is 99 or less
+	lda score + 1
+	adc #100
+	sta score + 1
+	dec score + 2			; decrement our third score byte
+	bcs @skip
+
+	lda #0						; ensure score can't be less than zero
+	sta score + 2
+	sta score + 1
+	sta score
+
+@skip:
+	lda #%00000001		; set flag to write score to screen
+	ora update
+	sta update
+	rts
+.endproc
 
 
 
