@@ -75,6 +75,9 @@ game_screen_mountain:
 game_screen_scoreline:
 .byte "SCORE 0000000"
 
+gameovertext:
+.byte " G A M E  O V E R", 0
+
 ; main application entry point for startup/reset
 .segment "CODE"
 .proc reset
@@ -161,14 +164,26 @@ wait_vblank2:				;wait for second vblank
 	cpx #32
 	bcc @loop
 
-	lda #%00000001		; check update flag
+	lda #%00000001			; check update flag
 	bit update
 	beq @skipscore
 		jsr display_score	; display score
-		lda #%11111110	; reset update flag
+		lda #%11111110		; reset update flag
 		and update
 		sta update
 	@skipscore:
+
+@skiphighscore:
+	lda #%00001000			; does game-over message need to be displayed
+	bit update
+	beq @skipgameover
+		vram_set_address (NAME_TABLE_0_ADDRESS + 14 * 32 + 7)
+		assign_16i text_address, gameovertext
+		jsr write_text
+		lda #%11110111		; reset game-over update flag
+		and update
+		sta update
+@skipgameover:
 
 	; write the current scroll and control regsiter settings to ppu
 	lda #0
@@ -221,8 +236,10 @@ paletteloop:				; intitialize palette table
 	lda #0					; reset the player dead flag
 	sta player_dead
 
-	; draw title screen
-	jsr display_title_screen
+resetgame:
+	jsr clear_sprites
+
+	jsr display_title_screen	; draw title screen
 
 	; setup game settings
 	lda #VBLANK_NMI|BG_0000|OBJ_1000
@@ -263,10 +280,26 @@ titleloop:
 mainloop:
 	lda time
 
-	cmp lasttime	; ensure time has changed
+	cmp lasttime						; ensure time has changed
 	beq mainloop
+	sta lasttime						; update lasttime
 
-	sta lasttime	; update lasttime
+	lda lives								; handle game over message
+	bne @notgameover
+	lda player_dead
+	cmp #1
+	beq @notgameover
+	cmp #240								; have waited long enough, jump back to title screen
+	beq resetgame
+	cmp #20
+	bne @notgameoversetup
+	lda #%00001000					; signal to display the game-over message
+	ora update
+	sta update
+@notgameoversetup:
+	inc player_dead
+	jmp mainloop
+@notgameover:
 
 	jsr player_actions 			; update ship sprites from player input
 	jsr move_player_bullet	; and bullet
