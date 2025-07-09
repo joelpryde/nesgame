@@ -63,8 +63,8 @@ default_palette:
 .byte $0F,$19,$29,$39 ; bg1 green
 .byte $0F,$11,$21,$31 ; bg2 blue
 .byte $0F,$00,$10,$30 ; bg3 greyscale
-.byte $0F,$28,$21,$11 ; sp0 yellow
-.byte $0F,$14,$24,$34 ; sp1 purple
+.byte $0F,$28,$21,$11 ; sp0 player
+.byte $0F,$26,$28,$17 ; sp1 explosion
 .byte $0F,$1B,$2B,$3B ; sp2 teal
 .byte $0F,$12,$22,$32 ; sp3 marine
 
@@ -256,7 +256,9 @@ titleloop:
 
 	jsr display_game_screen	; draw game screen
 
-	jsr place_ship	; place ship initially
+	jsr display_player			; display player ship
+
+	jsr ppu_update
 
 mainloop:
 	lda time
@@ -368,6 +370,67 @@ loop3:
 .endproc
 
 .proc player_actions
+	lda player_dead
+	beq @continue
+
+	cmp #1							; player flagged dead, set intitial shape
+	bne @notstep1
+
+	ldx #8							; set the fire explosion pattern
+	jsr set_player_shape
+	lda #$00000001			; select the second palette
+	sta oam + 2
+	sta oam + 6
+	sta oam + 10
+	sta oam + 14
+	jmp @nextstep
+
+	; wait four frames and then change player shape to next explosion pattern
+@notstep1:
+	cmp #5							; ready to change to next explosion shape
+	bne @notstep2
+	ldx #12							; set the second explosion pattern
+	jsr set_player_shape
+	jmp @nextstep
+
+	; after five more steps, next explosion pattern
+@notstep2:
+	cmp #10							; ready to change to next explosion shape
+	bne @notstep3
+	ldx #16							; set third explosion pattern
+	jsr set_player_shape
+	jmp @nextstep
+
+	; after five more frames, next explosion pattern
+@notstep3:
+	cmp #15							; read to change to next explosion shape
+	bne @notstep4
+	ldx #20							; set the fourth explosion pattern
+	jsr set_player_shape
+	jmp @nextstep
+
+	; after five more frames, check lives for game over
+@notstep4:
+	cmp #20							; explosion is finished, reset player
+	bne @nextstep
+	lda lives
+	cmp #0							; check for game over
+	bne @notgameover
+	rts
+
+;.endproc 
+
+@notgameover:
+	jsr setup_level			; reset all enemy objects
+	jsr display_player	; display the player at the starting position
+	lda #0							; clear the player dead flag
+	sta player_dead
+	rts
+@nextstep:
+	inc player_dead
+	rts
+@continue:
+
 	jsr gamepad_poll		; check gamepad to see what is selected
 	lda gamepad
 	and #PAD_L					; see if left is selected
@@ -486,15 +549,23 @@ not_gamepad_a:
 .endproc
 
 .proc setup_level
-	lda #0		; clear enemy data
+	lda #0				; clear enemy data
 	ldx #0
 @loop:
 	sta enemydata, x
 	inx
 	cpx #20
 	bne @loop
-	lda #20		; set initial cooldown
+	lda #20				; set initial cooldown
 	sta enemycooldown
+	
+	lda #$FF		; hide all enemy sprites
+	ldx #0
+@loop2:
+	sta oam + 20, x
+	inx
+	cpx #160
+	bne @loop2
 	rts
 .endproc
 
@@ -684,6 +755,7 @@ not_gamepad_a:
 	sta oam + 4, x
 	sta oam + 8, x
 	sta oam + 12, x
+
 	lda #0						; clear enemy's data flag
 	sta enemydata, y
 	jmp @skip
@@ -795,5 +867,46 @@ not_gamepad_a:
 	rts
 .endproc
 
+.proc set_player_shape
+	stx oam + 1
+	inx
+	stx oam + 5
+	inx
+	stx oam + 9
+	inx
+	stx oam + 13
+	rts
+.endproc
 
+.proc display_player
+	lda #196					; set y pos of all four parts of player ship
+	sta oam
+	sta oam + 4
+	lda 204
+	sta oam + 8
+	sta oam + 12
+
+	ldx #0						; set the index number of spprite pattern
+	stx oam + 1
+	inx
+	stx oam + 5
+	inx
+	stx oam + 9
+	inx
+	stx oam + 13
+
+	lda #%00000000		; set sprite attributes
+	sta oam + 2
+	sta oam + 6
+	sta oam + 10
+	sta oam + 14
+
+	lda #120					; set the x pos of all four parts of player ship
+	sta oam + 3
+	sta oam + 11
+	lda #128
+	sta oam + 7
+	sta oam + 15
+	rts
+.endproc
 
