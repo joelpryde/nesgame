@@ -37,6 +37,8 @@ enemycooldown: .res 1
 temp: .res 10
 score: .res 3					; player's current score
 update: .res 1				; flag to know when score has changed
+lives: .res 1					; player lives
+player_dead: .res 1		; is player dead, then tracks death animation frame 
 
 ; sprite oam data
 .segment "OAM"
@@ -213,6 +215,11 @@ paletteloop:				; intitialize palette table
 	sta score
 	sta score + 1
 	sta score + 2
+
+	lda #5					; set the player's starting lives
+	sta lives
+	lda #0					; reset the player dead flag
+	sta player_dead
 
 	; draw title screen
 	jsr display_title_screen
@@ -526,6 +533,7 @@ not_gamepad_a:
 	iny								; increment counter
 	cpy #10
 	bne @loop
+
 	rts								; did not find enemy to use
 :
 
@@ -594,7 +602,7 @@ not_gamepad_a:
 	lda #0
 @loop:
 	lda enemydata, y
-	beq :+
+	bne :+
 		jmp @skip					; enemy not on screen, skip to next
 	:
 
@@ -640,6 +648,47 @@ not_gamepad_a:
 	adc #8
 	sta oam + 8, x
 	sta oam + 12, x
+
+	; has the enemy hit the plalyer?
+	lda player_dead
+	cmp #0						; check if the player is dead
+	bne @notlevelwithplayer
+	lda oam, x				; get enemy y pos
+	clc
+	adc #14						; add enemy height
+	cmp #204					; is enemy level with player
+	bcc @notlevelwithplayer
+
+	lda oam + 3				; get player x pos
+	clc
+	adc #12						; add player width
+	cmp oam + 3, x		; is enemy x pos larger than player plus width
+	bcc @notlevelwithplayer
+
+	lda oam + 3, x		; get enemy x pos
+	clc
+	adc #14						; add enemy width
+	cmp oam + 3				; is enemy x pos ply width smaller than player's x pos
+	bcc @notlevelwithplayer
+
+	dec lives					; decrease lives counter
+	lda #%00000100		; set the flag so that lives are displayed
+	ora update
+	sta update
+
+	lda #1						; mark player as dead
+	sta player_dead
+
+	lda #$FF
+	sta oam, x				; erase the enemy
+	sta oam + 4, x
+	sta oam + 8, x
+	sta oam + 12, x
+	lda #0						; clear enemy's data flag
+	sta enemydata, y
+	jmp @skip
+
+@notlevelwithplayer:
 	
 	lda oam + 16
 	cmp #$FF					; is the bullet on the screen?
@@ -656,7 +705,7 @@ not_gamepad_a:
 	jsr collision_test
 	bcc @skip
 
-	; remove bullent and enemy from screen
+	; remove bullet and enemy from screen
 	lda #$FF
 	sta oam + 16			; erase the player bullet
 	sta oam, x				; erase the enemy
