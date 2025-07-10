@@ -237,18 +237,19 @@ paletteloop:				; intitialize palette table
 	sta level
 	jsr setup_level
 
+resetgame:
+
 	; reset player's score
 	lda #0
 	sta score
 	sta score + 1
 	sta score + 2
 
-	lda #5					; set the player's starting lives
+	lda #3					; set the player's starting lives
 	sta lives
 	lda #0					; reset the player dead flag
 	sta player_dead
 
-resetgame:
 	jsr clear_sprites
 
 	jsr display_title_screen	; draw title screen
