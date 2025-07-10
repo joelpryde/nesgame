@@ -162,8 +162,9 @@ wait_vblank2:				;wait for second vblank
 	sta PPU_VRAM_IO
 	inx
 	cpx #32
-	bcc @loop
+bcc @loop
 
+	; display score if update flag is set
 	lda #%00000001			; check update flag
 	bit update
 	beq @skipscore
@@ -173,7 +174,18 @@ wait_vblank2:				;wait for second vblank
 		sta update
 	@skipscore:
 
+	; display player lives if update flag is set
 @skiphighscore:
+	lda #%00000100
+	bit update
+	beq @skiplives
+		jsr display_lives
+		lda #%11111011
+		and update
+		sta update
+@skiplives:
+
+	; display game over message if update flag is set
 	lda #%00001000			; does game-over message need to be displayed
 	bit update
 	beq @skipgameover
@@ -397,6 +409,8 @@ loop3:
 	iny
 	cpy #13
 	bne loop3
+
+	jsr display_lives
 
 	jsr ppu_update	;wait for screen to be drawn
 	rts
@@ -943,3 +957,62 @@ not_gamepad_a:
 	rts
 .endproc
 
+.proc display_lives
+
+	; write top row of tiles
+	vram_set_address (NAME_TABLE_0_ADDRESS + 27 * 32 + 14)
+	ldx lives
+	beq @skip					; no lives to display
+	and #%00000111		; limit to max of 8
+@loop:
+	lda #5
+	sta PPU_VRAM_IO
+	lda #6
+	sta PPU_VRAM_IO
+	dex
+	bne @loop
+@skip:
+
+	; and bottom row of blank tiles to remove any previous tiles
+	lda #8						; blank out the remainder of the row
+	sec
+	sbc lives
+	bcc @skip2
+	tax
+	lda #0
+@loop2:
+	sta PPU_VRAM_IO
+	sta PPU_VRAM_IO
+	dex
+	bne @loop2
+@skip2:
+
+	; repeat above code with two different tiles for the base
+	vram_set_address (NAME_TABLE_0_ADDRESS + 28 * 32 + 14)
+	ldx lives
+	beq @skip3				; no lives to display
+	and #%00000111		; limit to max of 8
+@loop3:
+	lda #7
+	sta PPU_VRAM_IO
+	lda #8
+	sta PPU_VRAM_IO
+	dex
+	bne @loop3
+@skip3:
+
+	lda #8						; blank out the remainder of the row
+	sec
+	sbc lives
+	bcc @skip4
+	tax
+	lda #0
+@loop4:
+	sta PPU_VRAM_IO
+	sta PPU_VRAM_IO
+	dex
+	bne @loop4
+@skip4:
+
+	rts
+.endproc
