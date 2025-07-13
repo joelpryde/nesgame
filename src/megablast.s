@@ -32,7 +32,6 @@ lasttime: .res 1
 
 level: .res 1
 animate: .res 1
-enemydata: .res 20
 enemycooldown: .res 1
 temp: .res 10
 score: .res 3					; player's current score
@@ -49,6 +48,7 @@ oam: .res 256
 ; larger memory allocations
 .segment "BSS"
 palette: .res 32 ; current palette buffer
+enemydata: .res 100 ; enemy tracking data (10 * 10 bytes)
 
 .segment "CODE"
 
@@ -65,7 +65,7 @@ default_palette:
 .byte $0F,$00,$10,$30 ; bg3 greyscale
 .byte $0F,$28,$21,$11 ; sp0 player
 .byte $0F,$26,$28,$17 ; sp1 explosion
-.byte $0F,$1B,$2B,$3B ; sp2 teal
+.byte $0F,$13,$23,$33 ; sp2 purples
 .byte $0F,$12,$22,$32 ; sp3 marine
 
 game_screen_mountain:
@@ -77,6 +77,23 @@ game_screen_scoreline:
 
 gameovertext:
 .byte " G A M E  O V E R", 0
+
+; table of enemy data values (9 bytes)
+; enemy type (1 = large meteor, 2 = small meteor, 3 = smart bomb, 4 = explosion)
+; starting shape sprite number
+; ending shape sprite number
+; number of sprites
+; dx, starting change in x
+; dy, starting change in y
+; value added to score when destroyed
+; width for collision detection
+; height for collision detection
+; sprite attributes (set palette)
+enemy_source_data:
+.byte 008,012,004,000,002,002,012,012,003    	; large meteor
+.byte 036,037,001,001,003,003,008,007,002    	; small meteor
+.byte 016,019,001,002,003,006,008,008,003    	; smart bomb
+.byte 040,044,004,000,000,000,000,000,001			; enemy explosion
 
 ; main application entry point for startup/reset
 .segment "CODE"
@@ -597,29 +614,36 @@ not_gamepad_a:
 .endproc
 
 .proc setup_level
-	lda #0				; clear enemy data
+
+	; clear enemy data
+	lda #0				
 	ldx #0
 @loop:
 	sta enemydata, x
 	inx
-	cpx #20
-	bne @loop
-	lda #20				; set initial cooldown
+	cpx #100			; 100 bytes to clear
+bne @loop
+
+	; set initial cooldown
+	lda #20				
 	sta enemycooldown
 	
-	lda #$FF		; hide all enemy sprites
+	; hide all enemy sprites
+	lda #$FF
 	ldx #0
 @loop2:
 	sta oam + 20, x
 	inx
 	cpx #160
-	bne @loop2
+bne @loop2
+
 	rts
 .endproc
 
 .proc spawn_enemies
 
-	ldx enemycooldown		; decrement enemy cooldown
+	; decrement enemy cooldown and return if not 0
+	ldx enemycooldown		
 	dex
 	stx enemycooldown
 	cpx #0
@@ -627,8 +651,11 @@ not_gamepad_a:
 	rts
 :
 
-	ldx #1						; set a short cooldown
+	; set a short cooldown
+	ldx #1
 	stx enemycooldown
+
+	; use level and random value to see if we should spawn
 	lda level 				; get the current level
 	clc
 	adc #1						; increment by 1
@@ -638,28 +665,77 @@ not_gamepad_a:
 	jsr rand					; get next random value
 	tay								; transfer value to y register
 	cpy temp
-	bcc :+						; continue if random value is less than calculated value
+bcc :+						; continue if random value is less than calculated value
 	rts
 :
 
-	ldx #20						; set new cooldown period
+	; set new cooldown period
+	ldx #20						
 	stx enemycooldown
 
-	ldy #0						; see if new enemy object is available
+	; see if new enemy object is available
+	ldy #0
+	sty temp
 @loop:
 	lda enemydata, y
-	beq :+
-	iny								; increment counter
+beq :+
+	tya								; increase counter by 10 (need to transfer to accumulator)
+	adc #10
+	tay
+	inc temp
+	lda temp
 	cpy #10
 	bne @loop
-
 	rts								; did not find enemy to use
 :
 
-	lda #1						; mark the enemy as in use
-	sta enemydata, y
+	; determine type of enemy to select and mark it as inuse
+	sty temp + 1			; save y value
+	jsr rand					; determine the enemy type
+	ldy temp + 1
+	and #%1111
+	cmp #$0F
+	bne @notSmartBomb
+	lda #3						; set the enemy type as smart bomb
+	jmp @setEnemyType
+@notSmartBomb:
+	and #%1						; A will be 0 or 1
+	clc
+	adc #1						; A will be 1 (large meteor) or 2 (small meteor)
+@setEnemyType:
+	sta enemydata, y	; mark the enemy as in use (with type)
 
-	tya								; calculate the first sprite oam position
+	; copy enemy data from ROM table into RAM table
+	sec								; get the enemy data
+	sbc #1
+	sta temp + 1			; save as our loop counter
+	beq @skipMultiply	; skip if zero
+	lda #0
+	clc								; multiply the enemy type by 9
+@loop5:
+	adc #9
+	dec temp + 1
+	bne @loop5
+@skipMultiply:
+	tax
+	tya								; save y
+	pha
+	iny
+	lda #9						; copy 8 bytes
+	sta temp + 1
+@loop4:
+	lda enemy_source_data, x
+	sta enemydata, y
+	inx
+	iny
+	dec temp + 1
+	bne @loop4
+	pla								; restore 7
+	tay
+	lda enemydata, y
+
+	; calculate the start sprite position in oam sprite table
+	lda temp					; calculate the first sprite oam position
 	asl								; multiple by 16 (left shift four times)
 	asl
 	asl
@@ -668,15 +744,55 @@ not_gamepad_a:
 	adc #20						; skip the first 5 sprites (20 bytes)
 	tax
 
-	lda #0						; set y position of all four parts of enemy
+	; if our enemy has a change of x velocity
+	; randomly start to the left or right
+	lda enemydata + 4, y
+beq @noAdjustX
+	sty temp + 1
+	jsr rand
+	ldy temp + 1
+	and #%1
+	beq @noAdjustX
+	lda enemydata + 4, y
+	eor #$FF					; make negative
+	clc
+	adc #$01
+	sta enemydata + 4, y
+@noAdjustX:
+
+	; now setup the enemy sprite
+	lda enemydata + 3, y	; get number of sprites used
+	cmp #1
+	bne @fourSprites
+
+	; only one sprite used
+	lda #0						; set the y position (byte 0)
 	sta oam, x
+	lda #$FF					; hide sprites in the group
+	sta oam + 4, x
+	sta oam + 8, x
+	sta oam + 12, x
+	lda enemydata + 1, y	; get starting pattern
+	sta oam + 1, x		; set the index number (byte 1) of sprite pattern
+	lda enemydata + 9, y
+	sta oam + 2, x		; set sprite attributes
+	jsr rand
+	and #%01110000
+	clc
+	adc #48
+	sta oam + 3, x		; set the x pos
+	rts
+
+	; four sprites in use
+@fourSprites:
+	lda #0
+	sta oam, x				; 1
 	sta oam + 4, x
 	lda #8
 	sta oam + 8, x
 	sta oam + 12, x
-
-	lda #8						; set index number of sprite pattern
-	sta oam + 1, x
+	lda enemydata + 1, y	; 2
+	sta oam + 1, x		; 3
 	clc
 	adc #1
 	sta oam + 5, x
@@ -684,18 +800,16 @@ not_gamepad_a:
 	sta oam + 9, x
 	adc #1
 	sta oam + 13, x
-	
-	lda #%00000000		; set sprite attributes
-	sta oam + 2, x
+	lda enemydata + 9, y
+	sta oam + 2, x		; 4
 	sta oam + 6, x
 	sta oam + 10, x
 	sta oam + 14, x
-
-	jsr rand					; set the x position of all four parts of enemy (using rand for offset)
+	jsr rand
 	and #%11110000
 	clc
 	adc #48
-	sta oam + 3, x
+	sta oam + 3, x		; 5
 	sta oam + 11, x
 	clc
 	adc #8
