@@ -833,13 +833,13 @@ beq @noAdjustX
 
 	ldy #0
 	lda #0
+	sta temp + 2			; initialize loop counter
 @loop:
 	lda enemydata, y
 	bne :+
-		jmp @skip					; enemy not on screen, skip to next
+		jmp @skip				; enemy not on screen, skip to next
 	:
-
-	tya								; enemy is on screen, calculate first sprite oam position
+	lda temp + 2			; enemy is on screen, calculate first sprite oam position
 	asl								; multiply by 16 (left shift four times)
 	asl
 	asl
@@ -848,98 +848,118 @@ beq @noAdjustX
 	adc #20						; skip first five sprites
 	tax
 
-	lda oam, x				; get enemy y
+	; adjust enemy x position
+	lda enemydata + 4, y
+beq @noMoveX
 	clc
-	adc #1						; move down screen
-	cmp #196
-	bcc @nohitbottom
+	adc oam + 3, x
+	sta oam + 3, x
+	sta oam + 11, x
+	clc
+	adc #8
+	sta oam + 7, x
+	sta oam + 15, x
+@noMoveX:
 
+	; adjust enemy y position
+	lda oam, x				; get enemy y pos
+	clc
+	adc enemydata + 5, y	; add the change in y from table
+	sta oam, x				; save the new y pos
+	clc
+	adc enemydata + 8, y	; add the enemy height
+	cmp #204
+	bcc @nohitbottom
 	lda #255					; has reached the ground
 	sta oam, x				; hide all sprites
 	sta oam + 4, x
 	sta oam + 8, x
 	sta oam + 12, x
-	lda #0
+	lda #0						; clear the enemy's in-use flag
 	sta enemydata, y
-
-	clc							; check if the score is not already zero
+	clc								; check that the score is not zero
 	lda score
 	adc score + 1
 	adc score + 2
 	bne :+
 		jmp @skip
 	:
-	lda #1					; subtract 10 from score
+	lda #1						; subtract 10 from score
 	jsr subtract_score
-
 	jmp @skip
-
 @nohitbottom:
-	sta oam, x				; save the new y pos
+
+	; check for collision with player's ship
+	lda enemydata + 3, y
+	cmp #1						; does the enemy only have one pattern
+beq :+
+	lda oam, x				; update the other sprite y positions
 	sta oam + 4, x
 	clc
-	adc #8
+	adc $8
 	sta oam + 8, x
 	sta oam + 12, x
-
-	; has the enemy hit the plalyer?
+:
 	lda player_dead
-	cmp #0						; check if the player is dead
+	cmp #0						; check that the player is not currently dead
 	bne @notlevelwithplayer
-	lda oam, x				; get enemy y pos
+	
+	; if player is alive, check whether enemy is at same level as player
+	lda oam, x				; get enemy y
 	clc
-	adc #14						; add enemy height
-	cmp #204					; is enemy level with player
+	adc enemydata + 8, y	; add on the enemy height
+	cmp #$c4					; is the enemy level with player
 	bcc @notlevelwithplayer
 
-	lda oam + 3				; get player x pos
+	; compare x position of the enemy and player ship
+	lda oam + 3				; get player x position
 	clc
-	adc #12						; add player width
-	cmp oam + 3, x		; is enemy x pos larger than player plus width
+	adc #12						; add the width of player
+	cmp oam + 3, x		; is the enemy's x larger than player pos + width
+	bcc @notlevelwithplayer
+	lda oam + 3, x		; get the enemy x position
+	clc
+	adc enemydata + 7, y	; add on it's width
+	cmp oam + 3				; is the enemy's x plus width smaller than player's x pos
 	bcc @notlevelwithplayer
 
-	lda oam + 3, x		; get enemy x pos
-	clc
-	adc #14						; add enemy width
-	cmp oam + 3				; is enemy x pos ply width smaller than player's x pos
-	bcc @notlevelwithplayer
-
-	dec lives					; decrease lives counter
-	lda #%00000100		; set the flag so that lives are displayed
+	; player has been hit, decrease lives, set flag to diplay lives
+	; and mark player as dead
+	dec lives					; decrease our lives counter
+	lda #%00000100		; set the flag so the lives are displayed
 	ora update
 	sta update
-
-	lda #1						; mark player as dead
+	lda #1						; mark the player as dead
 	sta player_dead
 
+	; remove the enemy sprite from the screen and clear data flag
 	lda #$FF
 	sta oam, x				; erase the enemy
 	sta oam + 4, x
 	sta oam + 8, x
 	sta oam + 12, x
-
 	lda #0						; clear enemy's data flag
 	sta enemydata, y
 	jmp @skip
 
 @notlevelwithplayer:
-	
+
+	; check for collision with player's bullet
 	lda oam + 16
 	cmp #$FF					; is the bullet on the screen?
 	beq @skip
-
-	; load the x and y pos of enemy as collision detection args
 	lda oam, x				; get enemy y pos
 	sta cy2
 	lda oam + 3, x		; get enemy x pos
 	sta cx2
-	lda #14						; set enemy width/height
+	lda enemydata + 7, y ; get enemy width
 	sta cw2
+	lda enemydata + 8, y ; get enemy height
 	sta ch2
 	jsr collision_test
 	bcc @skip
 
-	; remove bullet and enemy from screen
+	; remove bullet and enemy from screen and add to score
 	lda #$FF
 	sta oam + 16			; erase the player bullet
 	sta oam, x				; erase the enemy
@@ -948,13 +968,18 @@ beq @noAdjustX
 	sta oam + 12, x
 	lda #0						; clear the enemy's data flag
 	sta enemydata, y
-
-	lda #2						; add 20 points to score
+	lda enemydata + 6, y ; add enemy's points to score
 	jsr add_score
 
+	; increment counter and check if we have gone through all of them
 @skip:
-	iny								; go to next enemy
-	cpy #10
+	tya								; go to next enemy
+	clc
+	adc #10
+	tay
+	inc temp + 2
+	lda temp + 2
+	cmp #10
 	beq :+
 		jmp @loop
 	:
