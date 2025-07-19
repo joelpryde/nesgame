@@ -848,6 +848,44 @@ beq @noAdjustX
 	adc #20						; skip first five sprites
 	tax
 
+	; move smart bomb towards player
+	lda enemydata, y
+	cmp #3						; is it a smart bomb
+	bne @notSmartBomb
+	lda enemydata + 4, y
+	and #%10000000		; get dx
+	beq @movingRight
+	lda oam + 3				; get player x
+	cmp oam + 3, x
+	bcc @notSmartBomb		; is smart bomb to the left of player
+	sec
+	sbc oam + 3, x
+	cmp #32
+	bcc @notSmartBomb
+	lda enemydata + 4, y
+	eor #$FF					; make negative
+	clc
+	adc #$01
+	sta enemydata + 4, y
+	jmp @notSmartBomb
+@movingRight:
+	lda oam + 3				; get player x pos
+	clc
+	adc #12						; adjust for width of player
+	cmp oam + 3, x
+	bcs @notSmartBomb	; is smart bomb to right of player
+	lda oam + 3, x
+	sec
+	sbc oam + 3				; get difference between player and smart bomb
+	cmp #44						; is it within 32 pixels
+	bcc @notSmartBomb
+	lda enemydata + 4, y
+	eor #$FF					; make negative (flip all bits and add one)
+	clc
+	adc #$01
+	sta enemydata + 4, y
+@notSmartBomb:
+
 	; adjust enemy x position
 	lda enemydata + 4, y
 beq @noMoveX
