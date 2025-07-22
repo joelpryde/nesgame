@@ -39,6 +39,8 @@ update: .res 1				; flag to know when score has changed
 lives: .res 1					; player lives
 player_dead: .res 1		; is player dead, then tracks death animation frame 
 
+starlocations: .res 10 * 2 ; 2 bytes per star
+
 ; sprite oam data
 .segment "OAM"
 oam: .res 256
@@ -214,6 +216,8 @@ bcc @loop
 		sta update
 @skipgameover:
 
+	jsr animate_stars
+
 	; write the current scroll and control regsiter settings to ppu
 	lda #0
 	sta PPU_VRAM_ADDRESS1
@@ -336,6 +340,16 @@ mainloop:
 	jsr spawn_enemies				; and attempt to spawn enemies
 	jsr move_enemies				; and move enemies
 
+	; swap two colors in the palette table for flash
+	lda time
+	and #%111
+	bne @nopalettechange
+		ldx palette + 1
+		lda palette + 2
+		sta palette + 1
+		stx palette + 2
+@nopalettechange:
+
 	jsr ppu_update					; update ppu each frame
 
 	jmp mainloop
@@ -388,6 +402,15 @@ loop:
 	iny
 	cpy #8
 	bne loop
+
+	; clear star locations
+	lda #0
+	ldx #0
+@loop:
+	sta starlocations, x
+	inx
+	cpx #20
+	bne @loop
 	
 	rts
 .endproc
@@ -429,6 +452,8 @@ loop3:
 	bne loop3
 
 	jsr display_lives
+
+	jsr place_stars
 
 	jsr ppu_update	;wait for screen to be drawn
 	rts
@@ -1235,5 +1260,106 @@ beq @singleSprite
 	bne @loop4
 @skip4:
 
+	rts
+.endproc
+
+.proc place_stars
+
+	; clear star locations
+	lda #0
+	ldx #0
+@loop:
+	sta starlocations, x
+	inx
+	cpx #20
+	bne @loop
+
+	; loop and set random row (rlower nibble + 1)
+	ldx #0
+@loop2:
+	jsr rand
+	pha								; save a
+	and #%1111				; get the lower nibble
+	clc
+	adc #1						; skip 0
+	sta temp 					; this is row of star
+	pla								; get a back
+
+	; set random column (upper 4 bits, multiplied by 2 = 0-31)
+	lsr
+	lsr
+	lsr
+	sta temp + 1
+
+	; add 32 until we get to our chosen row
+	assign_16i paddr, NAME_TABLE_0_ADDRESS + 64	; start from second row
+@loop3:
+	add_16_8 paddr, #32	; add 32 for each row
+	dec temp
+	bne @loop3
+
+	; then add column value for final screen location
+	add_16_8 paddr, temp + 1
+
+	; write pattern of star to screen
+	vram_set_address_i paddr
+	lda #12
+	sta PPU_VRAM_IO
+
+	; save our calculated address so we can change star pattern later
+	lda paddr
+	sta starlocations, x
+	lda paddr + 1
+	sta starlocations + 1, x
+
+	; increment x to point to our next start location entry and iterate if not done
+	inx
+	inx
+	cpx #20
+	beq :+
+		jmp @loop2
+	:
+
+	rts
+.endproc
+
+; animate stars by changing their pattern
+.proc animate_stars
+
+	; apply change every 4 ticks
+	lda time
+	and #%11
+	beq :+
+		rts
+	:
+
+	; check to see if star locations have been set
+	ldx #0
+	lda starlocations, x
+	bne @loop
+		rts 			; skip processing if no stars
+@loop:
+
+	; for each location, use stored value to set vram address
+	lda PPU_STATUS
+	lda starlocations + 1, x
+	sta PPU_VRAM_ADDRESS2
+	lda starlocations, x
+	sta PPU_VRAM_ADDRESS2
+
+	; using time counter, grab third bit to determine whether we show first or second star pattern
+	lda time
+	lsr
+	lsr
+	and #%1
+	clc
+	adc #12
+	sta PPU_VRAM_IO
+
+	; udpate x to point to next location and check to see if we have processed all
+	inx
+	inx
+	cpx #20
+	bne @loop
 	rts
 .endproc
