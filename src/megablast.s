@@ -65,7 +65,7 @@ default_palette:
 .byte $0F,$00,$10,$30 ; bg3 greyscale
 .byte $0F,$28,$21,$11 ; sp0 player
 .byte $0F,$26,$28,$17 ; sp1 explosion
-.byte $0F,$13,$23,$33 ; sp2 purples
+.byte $0F,$38,$28,$18 ; sp2 browns
 .byte $0F,$12,$22,$32 ; sp3 marine
 
 game_screen_mountain:
@@ -938,8 +938,51 @@ beq :+
 	sta oam + 8, x
 	sta oam + 12, x
 :
+
+	; animate enemy sprite
+	lda time
+	and #%11					; only animate every four frames
+bne @noanimate
+	lda enemydata + 1, y	; get the starting patthern and check i the enemy has more than one pattern
+	cmp enemydata + 2, y
+beq @noanimate
+	lda enemydata + 3, y	; split depending on whether we have one sprite or many
+	cmp #1
+beq @singleSprite
+	lda oam + 1, x		; get the first sprite pattern number
+	clc
+	adc #4						; go to the next sprite pattern
+	cmp enemydata + 2, y
+	beq :+
+	bcc :+
+		lda enemydata + 1, y	; past the end patter, get the starting pattern
+	:
+	sta oam + 1, x		; update with next pattern
+	clc
+	adc #1
+	sta oam + 5, x		; update the other patterns
+	clc
+	adc #1
+	sta oam + 9, x
+	clc
+	adc #1
+	sta oam + 13, x
+	jmp @noanimate
+@singleSprite:		; handle single sprite
+	lda oam + 1, x	; get the first pattern
+	clc
+	adc #1					; go to next pattern
+	cmp enemydata + 2, y
+	beq :+
+	bcc :+
+		lda enemydata + 1, y	; past the end, so go to starting pattern
+	:
+	sta oam + 1, x
+@noanimate:
+
+	; check that the player is not currently dead
 	lda player_dead
-	cmp #0						; check that the player is not currently dead
+	cmp #0
 	bne @notlevelwithplayer
 	
 	; if player is alive, check whether enemy is at same level as player
