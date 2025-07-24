@@ -38,6 +38,7 @@ score: .res 3					; player's current score
 update: .res 1				; flag to know when score has changed
 lives: .res 1					; player lives
 player_dead: .res 1		; is player dead, then tracks death animation frame 
+flash: .res 1					; number of times left to flash screen
 
 starlocations: .res 10 * 2 ; 2 bytes per star
 
@@ -349,6 +350,22 @@ mainloop:
 		sta palette + 1
 		stx palette + 2
 @nopalettechange:
+
+	; decrement flash value and change background color between black ($0f) and white ($30)
+	lda flash
+	beq @noflash
+		dec flash
+		lda palette
+		cmp #$0F
+		bne @noflash
+			lda #$30
+			sta palette
+			sta palette + 16
+			jmp mainloop
+@noflash:
+	lda #$f
+	sta palette
+	sta palette + 16
 
 	jsr ppu_update					; update ppu each frame
 
@@ -938,7 +955,21 @@ beq @noMoveX
 	sta oam + 4, x
 	sta oam + 8, x
 	sta oam + 12, x
-	lda #0						; clear the enemy's in-use flag
+
+	;
+	; we hit bottom!
+	;
+
+	; check if smartbomb, if so flash screen
+	lda enemydata, y
+	cmp #3
+	bne @notSmartBomb2
+		lda #32
+		sta flash
+@notSmartBomb2:		
+
+	; clear the enemy's in-use flag
+	lda #0						
 	sta enemydata, y
 	clc								; check that the score is not zero
 	lda score
@@ -947,7 +978,9 @@ beq @noMoveX
 	bne :+
 		jmp @skip
 	:
-	lda #1						; subtract 10 from score
+
+	; subtract 10 from score
+	lda #1
 	jsr subtract_score
 	jmp @skip
 @nohitbottom:
