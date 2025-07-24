@@ -39,6 +39,7 @@ update: .res 1				; flag to know when score has changed
 lives: .res 1					; player lives
 player_dead: .res 1		; is player dead, then tracks death animation frame 
 flash: .res 1					; number of times left to flash screen
+shake: .res 1					; number of times to shake screen
 
 starlocations: .res 10 * 2 ; 2 bytes per star
 
@@ -168,7 +169,9 @@ wait_vblank2:				;wait for second vblank
 	; only update PPU if rendering is enabled
 	lda ppu_ct11
 	and #BG_ON|OBJ_ON
-	beq @skip_ppu_update
+	bne :+
+		jmp @skip_ppu_update
+	:
 
 	bit PPU_STATUS
 	lda #>oam					; transfer sprite oam using dma
@@ -219,10 +222,17 @@ bcc @loop
 
 	jsr animate_stars
 
-	; write the current scroll and control regsiter settings to ppu
-	lda #0
+	; shake screen using scroll and screen settings
+	lda shake
+	beq :+
+		dec shake
+		and #%11
+		asl a
+		asl a
+	:
 	sta PPU_VRAM_ADDRESS1
 	sta PPU_VRAM_ADDRESS1
+
 	lda ppu_ct10
 	sta PPU_CONTROL
 	lda ppu_ct11
@@ -736,7 +746,7 @@ beq :+
 	jsr rand					; determine the enemy type
 	ldy temp + 1
 	and #%1111
-	cmp #$0F
+	cmp #$0C
 	bne @notSmartBomb
 	lda #3						; set the enemy type as smart bomb
 	jmp @setEnemyType
@@ -960,12 +970,13 @@ beq @noMoveX
 	; we hit bottom!
 	;
 
-	; check if smartbomb, if so flash screen
+	; check if smartbomb, if so flash screen and shake screen
 	lda enemydata, y
 	cmp #3
 	bne @notSmartBomb2
 		lda #32
 		sta flash
+		sta shake
 @notSmartBomb2:		
 
 	; clear the enemy's in-use flag
