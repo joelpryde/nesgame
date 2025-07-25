@@ -40,6 +40,8 @@ lives: .res 1					; player lives
 player_dead: .res 1		; is player dead, then tracks death animation frame 
 flash: .res 1					; number of times left to flash screen
 shake: .res 1					; number of times to shake screen
+enemycount: .res 1		; number of enemies that have appeard
+displaylevel: .res 1  ; counter for displaying level 
 
 starlocations: .res 10 * 2 ; 2 bytes per star
 
@@ -81,6 +83,9 @@ game_screen_scoreline:
 
 gameovertext:
 .byte " G A M E  O V E R", 0
+
+leveltext:
+.byte " L E V E L ",0
 
 ; table of enemy data values (9 bytes)
 ; enemy type (1 = large meteor, 2 = small meteor, 3 = smart bomb, 4 = explosion)
@@ -220,6 +225,47 @@ bcc @loop
 		sta update
 @skipgameover:
 
+	; display and remove the level display message
+	lda #%00010000			; check if level message needs to be displayed
+	bit update
+	beq @skipdisplaylevel
+		vram_set_address (NAME_TABLE_0_ADDRESS + 14 *32 + 9)
+		assign_16i text_address, leveltext
+		jsr write_text
+		lda level					; transform each decimal digit of level
+		jsr dec99_to_bytes
+		stx temp
+		sta temp + 1
+		lda temp
+		clc
+		adc #48
+		sta PPU_VRAM_IO
+		lda temp + 1
+		clc
+		adc #48
+		sta PPU_VRAM_IO
+		lda #%11101111		; reset the level message update flag
+		and update
+		sta update
+@skipdisplaylevel:
+	
+	; remove the level display
+	lda #%00100000			; does level message need to be removed
+	bit update
+	beq @skipremovedisplaylevel
+		vram_set_address (NAME_TABLE_0_ADDRESS + 14 * 32 + 9)
+		ldx #0
+		lda #0
+		:
+			sta PPU_VRAM_IO
+			inx
+			cpx #18
+			bne :-
+		lda #%11011111		; reset the level message update flag
+		and update
+		ora update
+@skipremovedisplaylevel:		
+
 	jsr animate_stars
 
 	; shake screen using scroll and screen settings
@@ -264,6 +310,12 @@ paletteloop:				; intitialize palette table
 	cpx #32
 	bcc paletteloop
 
+	; initialize PPU control register for sprite pattern table
+	lda #%10001000		; NMI enabled, sprites use pattern table 0
+	sta ppu_ct10
+	lda #%00011110		; sprites and background enabled
+	sta ppu_ct11
+
 	; setup first level
 	lda #1
 	sta level
@@ -277,20 +329,18 @@ resetgame:
 	sta score + 1
 	sta score + 2
 
-	lda #3					; set the player's starting lives
+	; display level at start of game
+	lda #3					; set player starting lives
 	sta lives
-	lda #0					; reset the player dead flag
+	lda #0					; reset our player dead flag
 	sta player_dead
-
-	jsr clear_sprites
-
-	jsr display_title_screen	; draw title screen
-
-	; setup game settings
-	lda #VBLANK_NMI|BG_0000|OBJ_1000
-	sta ppu_ct10
-	lda #BG_ON|OBJ_ON
-	sta ppu_ct11
+	jsr display_game_screen	; display game screen
+	jsr display_player	; display player ship
+	lda #64
+	sta displaylevel
+	lda #%00010001	;set flag so current score and level will be displayed
+	ora update
+	sta update
 
 	jsr ppu_update
 
@@ -350,6 +400,16 @@ mainloop:
 	jsr move_player_bullet	; and bullet
 	jsr spawn_enemies				; and attempt to spawn enemies
 	jsr move_enemies				; and move enemies
+
+	; check for removing the level display
+	lda displaylevel
+	beq @nodisplaylevelcountdown
+		dec displaylevel
+		bne @nodisplaylevelcountdown
+		lda #%00100000
+		ora update
+		sta update
+@nodisplaylevelcountdown:
 
 	; swap two colors in the palette table for flash
 	lda time
@@ -689,6 +749,17 @@ bne @loop
 	cpx #160
 bne @loop2
 
+	; reset enemy counter
+	lda #0
+	sta enemycount
+	lda #64
+	sta displaylevel
+	
+	; set a flag so current level will be displayed
+	lda #%00010000
+	ora update
+	sta update
+
 	rts
 .endproc
 
@@ -743,6 +814,20 @@ beq :+
 
 	; determine type of enemy to select and mark it as inuse
 	sty temp + 1			; save y value
+
+	; update enemycount
+	inc enemycount
+	lda #40
+	cmp enemycount
+	bne @notendoflevel
+		inc level
+		lda #64
+		sta displaylevel
+		lda #0
+		sta enemycount
+		lda #%00010000	; set flag for level to be displayed
+@notendoflevel:
+
 	jsr rand					; determine the enemy type
 	ldy temp + 1
 	and #%1111
@@ -1219,7 +1304,7 @@ beq @singleSprite
 	lda #196					; set y pos of all four parts of player ship
 	sta oam
 	sta oam + 4
-	lda 204
+	lda #204
 	sta oam + 8
 	sta oam + 12
 
