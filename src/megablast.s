@@ -51,6 +51,37 @@ oam: .res 256
 
 .include "neslib.s"
 
+;
+; include sound engine and effects data
+;
+.segment "CODE"
+ 
+; FamiStudio config.
+FAMISTUDIO_CFG_EXTERNAL       = 1
+FAMISTUDIO_CFG_DPCM_SUPPORT   = 1
+FAMISTUDIO_CFG_SFX_SUPPORT    = 1 
+FAMISTUDIO_CFG_SFX_STREAMS    = 2
+FAMISTUDIO_CFG_EQUALIZER      = 1
+FAMISTUDIO_USE_VOLUME_TRACK   = 1
+FAMISTUDIO_USE_PITCH_TRACK    = 1
+FAMISTUDIO_USE_SLIDE_NOTES    = 1
+FAMISTUDIO_USE_VIBRATO        = 1
+FAMISTUDIO_USE_ARPEGGIO       = 1
+FAMISTUDIO_CFG_SMOOTH_VIBRATO = 1
+FAMISTUDIO_USE_RELEASE_NOTES  = 1
+FAMISTUDIO_DPCM_OFF           = $e000
+ 
+; CA65-specifc config.
+.define FAMISTUDIO_CA65_ZP_SEGMENT   ZEROPAGE
+.define FAMISTUDIO_CA65_RAM_SEGMENT  BSS
+.define FAMISTUDIO_CA65_CODE_SEGMENT CODE
+ 
+.include "famistudio_ca65.s"
+.include "megablast-sfx.s"
+
+.segment "ZEROPAGE"
+sfx_channel: .res 1		; sound effect channel to use
+
 ; larger memory allocations
 .segment "BSS"
 palette: .res 32 ; current palette buffer
@@ -268,7 +299,7 @@ bcc @loop
 
 	jsr animate_stars
 
-	; shake screen using scroll and screen settings
+	; shake screen using scroll
 	lda shake
 	beq :+
 		dec shake
@@ -276,9 +307,10 @@ bcc @loop
 		asl a
 		asl a
 	:
-	sta PPU_VRAM_ADDRESS1
-	sta PPU_VRAM_ADDRESS1
 
+	; write current screen settings (for shake scroll)
+	sta PPU_VRAM_ADDRESS1
+	sta PPU_VRAM_ADDRESS1
 	lda ppu_ct10
 	sta PPU_CONTROL
 	lda ppu_ct11
@@ -286,10 +318,15 @@ bcc @loop
 
 @skip_ppu_update:
 
+	; call famistudio play update
+	jsr famistudio_update
+
 	; flag that the ppu has update is complete
 	ldx #0
 	stx nmi_ready
-	pla								; restor registers and returns
+
+	; restore registers and returns
+	pla
 	tay
 	pla
 	tax
@@ -298,6 +335,15 @@ bcc @loop
 .endproc
 
 .proc main
+		; init sound engine
+		lda #1					; NTSC
+		ldx #0
+		ldy #0
+		jsr famistudio_init
+		ldx #.lobyte(sounds)	; set the address of sound effects
+		ldy #.hibyte(sounds)
+		jsr famistudio_sfx_init
+
 	; turn off rendering immediately
 	lda #0
 	sta PPU_MASK
@@ -667,6 +713,11 @@ not_gamepad_right:
 			clc
 			adc #6					; adjust the c position to center the bullen on the player hsip
 			sta oam + 19		; set bullet x pos
+
+			lda #FAMISTUDIO_SFX_CH1	; play zap sound affect
+			sta sfx_channel
+			lda #0
+			jsr play_sfx
 
 not_gamepad_a:
 
@@ -1062,6 +1113,11 @@ beq @noMoveX
 		lda #32
 		sta flash
 		sta shake
+
+		lda #FAMISTUDIO_SFX_CH1	; play big boom sound effect
+		sta sfx_channel
+		lda #2
+		jsr play_sfx
 @notSmartBomb2:		
 
 	; clear the enemy's in-use flag
@@ -1159,11 +1215,15 @@ beq @singleSprite
 	bcc @notlevelwithplayer
 
 	; player has been hit, decrease lives, set flag to diplay lives
-	; and mark player as dead
+	; play boom affect, and mark player as dead
 	dec lives					; decrease our lives counter
 	lda #%00000100		; set the flag so the lives are displayed
 	ora update
 	sta update
+	lda #FAMISTUDIO_SFX_CH1	; play big boom sound effect
+	sta sfx_channel
+	lda #2
+	jsr play_sfx
 	lda #1						; mark the player as dead
 	sta player_dead
 
@@ -1205,6 +1265,11 @@ beq @singleSprite
 	sta enemydata, y
 	lda enemydata + 6, y ; add enemy's points to score
 	jsr add_score
+
+	lda #FAMISTUDIO_SFX_CH1
+	sta sfx_channel
+	lda #1						; play boom sound effect
+	jsr play_sfx
 
 	; increment counter and check if we have gone through all of them
 @skip:
@@ -1490,5 +1555,24 @@ beq @singleSprite
 	inx
 	cpx #20
 	bne @loop
+	rts
+.endproc
+
+; play sound effect (a = sound effect slot, sfx_channel = sound effect channel to use)
+.proc play_sfx
+	sta temp + 9				; save the sound effect number
+	tya									; save the current register values
+	pha
+	txa
+	pha
+
+	lda temp + 9				; get the sound effect number
+	ldx sfx_channel			; choose the channel to play sound effect on
+	jsr famistudio_sfx_play
+
+	pla									; restore register values
+	tax
+	pla
+	tay
 	rts
 .endproc
