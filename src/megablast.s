@@ -78,6 +78,10 @@ FAMISTUDIO_DPCM_OFF           = $e000
  
 .include "famistudio_ca65.s"
 .include "megablast-sfx.s"
+.include "megablast-music.s"
+
+.segment "DPCM"
+.incbin "megablast-music.dmc"
 
 .segment "ZEROPAGE"
 sfx_channel: .res 1		; sound effect channel to use
@@ -337,8 +341,8 @@ bcc @loop
 .proc main
 		; init sound engine
 		lda #1					; NTSC
-		ldx #0
-		ldy #0
+		ldx #.lobyte(music_data_untitled)
+		ldy #.hibyte(music_data_untitled)
 		jsr famistudio_init
 		ldx #.lobyte(sounds)	; set the address of sound effects
 		ldy #.hibyte(sounds)
@@ -389,6 +393,10 @@ resetgame:
 	sta update
 
 	jsr ppu_update
+
+	; play first song
+	lda #0
+	jsr play_music
 
 	; wait for gamepad to be pressed
 titleloop:
@@ -1571,6 +1579,24 @@ beq @singleSprite
 	jsr famistudio_sfx_play
 
 	pla									; restore register values
+	tax
+	pla
+	tay
+	rts
+.endproc
+
+; play music (a = music track number)
+.proc play_music
+	sta temp + 9				; save the music track number
+	tya									; save current register values
+	pha
+	txa
+	pha
+
+	lda temp + 9				; restore track number
+	jsr famistudio_music_play
+
+	pla									; restor register values
 	tax
 	pla
 	tay
