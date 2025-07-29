@@ -49,7 +49,7 @@ BG_0000 = $00
 BG_1000 = $10
  
 ; Enable NMI
-VBLANK_NMI = $80
+VBLANK_NMI = $80 ; %10000000 
  
 BG_OFF = $00 ; Turn background off
 BG_CLIP = $08 ; Clip the background
@@ -120,13 +120,16 @@ gamepad:	.res 1 	; current gamepad value
 
 ; Wait until next NMI and turn rendering on
 .proc ppu_update
+
 	lda ppu_ct10
 	ora #VBLANK_NMI
 	sta ppu_ct10
 	sta PPU_CONTROL
+
 	lda ppu_ct11
 	ora #OBJ_ON|BG_ON
 	sta ppu_ct11
+
 	jsr wait_frame
 	rts
 .endproc
@@ -134,14 +137,18 @@ gamepad:	.res 1 	; current gamepad value
 ; Wait for screen to be rendered and then turn rendering off so we can write to PPU without corruption
 .proc ppu_off
 	jsr wait_frame
+
+	; turn off nmi (why)
 	lda ppu_ct10
 	and #%0111111
 	sta ppu_ct10
 	sta PPU_CONTROL
+
 	lda ppu_ct11
 	and #%11100001
 	sta ppu_ct11
 	sta PPU_MASK
+
 	rts
 .endproc
 

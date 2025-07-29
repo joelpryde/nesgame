@@ -12,7 +12,6 @@ title_attributes:
 
 .proc display_title_screen
 	jsr ppu_off						; wait for screen to be drawn and then turn off
-	
 	jsr clear_nametable		; write title text
 	
 	; write out press play text (on 5 line of screen and 7 tiles in)
@@ -40,10 +39,13 @@ loop:
 	lda #0
 	ldx #0
 @loop:
+
 	sta starlocations, x
 	inx
 	cpx #20
 	bne @loop
+
+	jsr ppu_update
 	
 	rts
 .endproc

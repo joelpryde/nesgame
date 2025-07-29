@@ -161,7 +161,8 @@ resetgame:
 	lda #0
 	jsr play_music
 
-	; wait for gamepad to be pressed
+	; display title and wait for gamepad to be pressed
+	jsr display_title_screen
 titleloop:
 	jsr gamepad_poll
 	lda gamepad
@@ -184,7 +185,6 @@ titleloop:
 	sta SEED2 + 1
 
 	jsr display_game_screen	; draw game screen
-
 	jsr display_player			; display player ship
 
 	jsr ppu_update
@@ -273,7 +273,6 @@ exit:
 
 .proc display_game_screen
 	jsr ppu_off						; wait for screen clear
-
 	jsr clear_nametable		; clear first name table
 
 	; output mountain line
