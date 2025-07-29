@@ -2,25 +2,25 @@
 .macro vram_set_address newaddress
 	lda PPU_STATUS
 	lda #>newaddress
-	sta PPU_VRAM_ADDRESS2
+	sta PPUADDR
 	lda #<newaddress
-	sta PPU_VRAM_ADDRESS2
+	sta PPUADDR
 .endmacro
 
 ; Sets the PPU VRAM address pointer to the specified address at pointer
 .macro vram_set_address_i addresspointer
   lda PPU_STATUS
 	lda addresspointer+1
-	sta PPU_VRAM_ADDRESS2
+	sta PPUADDR
 	lda addresspointer+0
-	sta PPU_VRAM_ADDRESS2
+	sta PPUADDR
 .endmacro
 
 ; Clears the PPU VRAM address pointer to $0000
 .macro vram_clear_address
 	lda #0
-	sta PPU_VRAM_ADDRESS2
-	sta PPU_VRAM_ADDRESS2
+	sta PPUADDR
+	sta PPUADDR
 .endmacro
 
 ; Assigns a 16-bit immediate value to a memory location (little-endian)

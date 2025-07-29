@@ -1,12 +1,35 @@
+;
 ; Define PPU Registers
+;
+
+; Controls basic PPU operation: base nametable address, VRAM increment direction, sprite/background pattern table addresses, 
+; sprite size (8x8 or 8x16), and whether to generate NMI on VBlank.
 PPU_CONTROL = $2000
+
+; Controls rendering options: grayscale mode, background/sprite clipping in leftmost 8 pixels, background/sprite enable/disable, 
+; and color emphasis (tinting).
 PPU_MASK = $2001
+
+; Read-only register that reports PPU status: VBlank flag, sprite 0 hit flag, sprite overflow flag. 
+; Reading this register clears the VBlank flag and resets the write toggle for $2005/$2006.
 PPU_STATUS = $2002
-PPU_SPRRAM_ADDRESS = $2003
-PPU_SPRRAM_IO = $2004
-PPU_VRAM_ADDRESS1 = $2005
-PPU_VRAM_ADDRESS2 = $2006
-PPU_VRAM_IO = $2007
+
+; Sets the address in Object Attribute Memory (sprite memory) for accessing via $2004.
+OAMADDR = $2003
+
+; Read/write sprite data. Writing increments the OAM address. Used for updating sprite attributes (Y position, tile number, attributes, X position).
+OAMDATA = $2004
+
+; Write-only register for setting scroll position. Takes two writes - first for horizontal scroll, second for vertical scroll. 
+; The write toggle is shared with $2006.
+PPUSCROLL = $2005
+
+; Write-only register for setting VRAM address. Takes two writes (high byte, then low byte) to set the full 16-bit address for accessing VRAM via $2007.
+PPUADDR = $2006
+
+; Read/write VRAM data at the address set by $2006. After each access, the VRAM address increments by either 1 or 32 (controlled by bit 2 of PPUCTRL).
+PPUDATA = $2007
+
 SPRITE_DMA = $4014
 
 ; Name table locations
@@ -126,16 +149,16 @@ gamepad:	.res 1 	; current gamepad value
 .proc clear_nametable
 	lda PPU_STATUS
 	lda #$20
-	sta PPU_VRAM_ADDRESS2
+	sta PPUADDR
 	lda #$00
-	sta PPU_VRAM_ADDRESS2
+	sta PPUADDR
 
 	lda #0
 	ldy #30
 	rowloop:
 		ldx #32
 		columnloop:
-			sta PPU_VRAM_IO
+			sta PPUDATA
 			dex
 			bne columnloop
 		dey
@@ -143,7 +166,7 @@ gamepad:	.res 1 	; current gamepad value
 	
 	ldx #64
 	loop:
-		sta PPU_VRAM_IO
+		sta PPUDATA
 		dex
 		bne loop
 	rts
@@ -278,40 +301,6 @@ try10:
 
 @finished:
 
-	rts
-.endproc
-
-.proc display_score
-	vram_set_address (NAME_TABLE_0_ADDRESS + 27 * 32 + 6)
-
-	lda score + 2					; transform first two digits
-	jsr dec99_to_bytes
-	stx temp
-	sta temp + 1
-
-	lda score + 1					; next two digits
-	jsr dec99_to_bytes
-	stx temp + 2
-	sta temp + 3
-
-	lda score							; final two digits
-	jsr dec99_to_bytes
-	stx temp + 4
-	sta temp + 5
-
-	ldx #0								; write the six characters to the screen
-@loop:
-	lda temp, x
-	clc
-	adc #48
-	sta PPU_VRAM_IO
-	inx
-	cpx #6
-	bne @loop
-	lda #48								; write trailing 0
-	sta PPU_VRAM_IO
-
-	vram_clear_address
 	rts
 .endproc
 
